@@ -4,7 +4,22 @@
 
 mcpgate defends against an AI agent (or a compromised prompt) that attempts to call MCP tools it should not be allowed to call — exfiltrating files, deleting data, or executing arbitrary commands through an MCP server.
 
+As of v1.0 it also defends against a **malicious or compromised MCP server** that abuses the reverse channel — using `sampling/createMessage` to drive the agent's LLM, or `prompts/get` to inject untrusted prompt templates.
+
 The gateway is **not** a network-facing service. It is designed to run on the same machine as the agent and the MCP server, communicating over localhost and stdio.
+
+### Gated surfaces
+
+mcpgate interposes on the JSON-RPC stream in **both directions** and applies policy to every method with side effects:
+
+| Method | Direction | Gated since |
+|--------|-----------|-------------|
+| `tools/call` | agent → server | v0.1 |
+| `resources/read` | agent → server | v0.1 |
+| `prompts/get` | agent → server | v1.0 |
+| `sampling/createMessage` | server → agent (reverse channel) | v1.0 |
+
+All other methods (initialization, capability negotiation, notifications, etc.) pass through untouched.
 
 ---
 
@@ -48,12 +63,11 @@ When mcpgate shuts down (or the context is cancelled), it sends `SIGTERM` to the
 
 ---
 
-## Known limitations (v0.1)
+## Known limitations
 
 - **No TLS:** The web API listens on plain HTTP. The localhost-only bind and Host-check mitigate this for local use, but do not use mcpgate as a remotely-accessible service without adding a TLS terminator.
 - **No symlink resolution in path checks:** Path constraints check the string value of the `path` argument. They do not resolve symlinks. A tool that follows a symlink out of the allowed root will not be caught by mcpgate's path constraint — it depends on the MCP server or OS to enforce filesystem boundaries.
 - **TOCTOU:** Path validation occurs at policy-check time, not at actual filesystem access time. This is a known limitation documented in the source (`internal/policy/engine.go`).
-- **`ask` verdict is deny in headless mode:** Interactive approval (v0.2) is not yet implemented. Any tool marked `allow: ask` will be denied in the current release.
 
 ---
 

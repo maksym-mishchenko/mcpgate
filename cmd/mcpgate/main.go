@@ -1,13 +1,16 @@
+// cmd/mcpgate/main.go
 package main
 
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/maksym-mishchenko/mcpgate/internal/approval"
 	"github.com/maksym-mishchenko/mcpgate/internal/audit"
@@ -18,15 +21,24 @@ import (
 	"github.com/maksym-mishchenko/mcpgate/internal/web"
 )
 
+// version is stamped by GoReleaser via ldflags.
+var version = "dev"
+
 func main() {
-	configPath := flag.String("config", "mcpgate.yaml", "path to policy config")
-	token := flag.String("token", os.Getenv("MCPGATE_TOKEN"), "bearer token for web UI")
-	addr := flag.String("addr", "127.0.0.1:18789", "web server listen address")
+	configPath      := flag.String("config", "mcpgate.yaml", "path to policy config")
+	token           := flag.String("token", os.Getenv("MCPGATE_TOKEN"), "bearer token for web UI")
+	addr            := flag.String("addr", "127.0.0.1:18789", "web server listen address")
+	approvalTimeout := flag.Duration("approval-timeout", 30*time.Second, "how long to wait for human approval before auto-deny")
 	flag.Parse()
 
 	serverArgs := flag.Args()
 	if len(serverArgs) == 0 {
 		slog.Error("usage: mcpgate [flags] -- <server-command> [args...]")
+		os.Exit(1)
+	}
+
+	if *token == "" {
+		slog.Error("no token: set --token or MCPGATE_TOKEN env var")
 		os.Exit(1)
 	}
 
@@ -59,6 +71,30 @@ func main() {
 	// Approval coordinator.
 	coord := approval.New()
 
+	// AuditQuerier — cast if the store supports it.
+	var querier audit.AuditQuerier
+	if q, ok := any(store).(audit.AuditQuerier); ok {
+		querier = q
+	}
+
+	// Web server (also implements event.Notifier for the proxy).
+	webSrv := web.New(web.Config{
+		Token:        *token,
+		Coordinator:  coord,
+		AuditQuerier: querier,
+	})
+	httpServer := &http.Server{
+		Addr:    *addr,
+		Handler: webSrv.Handler(),
+	}
+	go func() {
+		slog.Info("web server starting", "addr", *addr, "version", version)
+		fmt.Fprintf(os.Stderr, "\n  Open: http://%s/?token=%s\n\n", *addr, *token)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("web server error", "err", err)
+		}
+	}()
+
 	// Agent transport = mcpgate's own stdin/stdout.
 	agentTransport := transport.NewStdio(os.Stdin, os.Stdout)
 
@@ -70,23 +106,9 @@ func main() {
 		Coordinator:     coord,
 		AuditStore:      store,
 		ServerName:      serverArgs[0],
+		Notifier:        webSrv,
+		ApprovalTimeout: *approvalTimeout,
 	})
-
-	// Web server.
-	webSrv := web.New(web.Config{
-		Token:       *token,
-		Coordinator: coord,
-	})
-	httpServer := &http.Server{
-		Addr:    *addr,
-		Handler: webSrv.Handler(),
-	}
-	go func() {
-		slog.Info("web server starting", "addr", *addr)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("web server error", "err", err)
-		}
-	}()
 
 	// Watch for child exit — drain pending approvals and cancel context.
 	go func() {
@@ -104,5 +126,7 @@ func main() {
 
 	// Graceful shutdown.
 	coord.DrainAll(approval.VerdictDeny)
-	httpServer.Shutdown(context.Background()) //nolint:errcheck
+	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutCancel()
+	httpServer.Shutdown(shutCtx) //nolint:errcheck
 }

@@ -24,3 +24,9 @@ type AuditStore interface {
 	VerifyChain() (ok bool, err error)
 	Close() error
 }
+
+// AuditQuerier extends the store with read access for the web UI.
+// sqliteStore implements this; tests may or may not.
+type AuditQuerier interface {
+	Recent(n int) ([]Entry, error)
+}

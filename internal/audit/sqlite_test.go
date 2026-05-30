@@ -1,6 +1,7 @@
 package audit_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -77,5 +78,37 @@ func TestWriteFailureDenies(t *testing.T) {
 	err := s.Append(audit.Entry{Method: "tools/call", Verdict: "ALLOW"})
 	if err == nil {
 		t.Error("expected error from injected write failure")
+	}
+}
+
+func TestRecent(t *testing.T) {
+	s, cleanup := tempDB(t)
+	defer cleanup()
+
+	for i := 0; i < 5; i++ {
+		if err := s.Append(audit.Entry{
+			Method:  "tools/call",
+			Server:  "fs",
+			Name:    fmt.Sprintf("tool_%d", i),
+			Verdict: "ALLOW",
+		}); err != nil {
+			t.Fatalf("append %d: %v", i, err)
+		}
+	}
+
+	q, ok := interface{}(s).(audit.AuditQuerier)
+	if !ok {
+		t.Skip("store does not implement AuditQuerier")
+	}
+	entries, err := q.Recent(3)
+	if err != nil {
+		t.Fatalf("recent: %v", err)
+	}
+	if len(entries) != 3 {
+		t.Errorf("got %d entries, want 3", len(entries))
+	}
+	// Most recent first.
+	if entries[0].Name != "tool_4" {
+		t.Errorf("first entry name = %q, want tool_4", entries[0].Name)
 	}
 }

@@ -139,6 +139,30 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }
 
+// Recent returns the n most recent audit entries, newest first.
+func (s *SQLiteStore) Recent(n int) ([]Entry, error) {
+	rows, err := s.db.Query(
+		`SELECT id, seq, method, server, name, args, verdict, reason, ts_unix FROM audit_log
+		 ORDER BY seq DESC LIMIT ?`, n)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []Entry
+	for rows.Next() {
+		var e Entry
+		var ts int64
+		if err := rows.Scan(&e.ID, &e.Seq, &e.Method, &e.Server, &e.Name,
+			&e.Args, &e.Verdict, &e.Reason, &ts); err != nil {
+			return nil, err
+		}
+		e.Ts = time.Unix(ts, 0).UTC()
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
 // TestCorruptRow directly updates a row's verdict — for tamper-detection tests only.
 func (s *SQLiteStore) TestCorruptRow(seq int64, newVerdict string) {
 	s.db.Exec(`UPDATE audit_log SET verdict=? WHERE seq=?`, newVerdict, seq)

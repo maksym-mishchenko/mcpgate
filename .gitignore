@@ -1,4 +1,4 @@
-mcpgate
+/mcpgate
 *.db
 *.db-wal
 *.db-shm

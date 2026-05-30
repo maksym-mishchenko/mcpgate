@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.0] - 2026-05-30
+
+### Added
+- HTTP transport (`internal/transport/http_client.go`) — POST JSON-RPC to remote MCP servers
+- Egress allowlist (`NewHTTPWithEgress`) — blocks outbound dials to non-listed hostnames
+- `ServerConfig.URL` and `EgressAllow` fields with `TransportKind()` helper
+- Multi-server `Router` (`internal/proxy/router.go`) — named transport registry
+- `main.go` wires HTTP or stdio transport per server based on config; falls back to CLI args
+
 ## v0.3.0 — "Prove what your agent did"
 
 ### What's new

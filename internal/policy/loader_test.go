@@ -61,3 +61,29 @@ func TestLoadConfig(t *testing.T) {
 		t.Error("path constraints missing")
 	}
 }
+
+func TestServerConfigURL(t *testing.T) {
+	cfg := policy.ServerConfig{
+		URL:         "http://localhost:8080/mcp",
+		EgressAllow: []string{"localhost"},
+	}
+	if cfg.TransportKind() != "http" {
+		t.Errorf("TransportKind = %q, want http", cfg.TransportKind())
+	}
+}
+
+func TestServerConfigCommand(t *testing.T) {
+	cfg := policy.ServerConfig{
+		Command: []string{"mcp-filesystem"},
+	}
+	if cfg.TransportKind() != "stdio" {
+		t.Errorf("TransportKind = %q, want stdio", cfg.TransportKind())
+	}
+}
+
+func TestServerConfigNeitherErrors(t *testing.T) {
+	cfg := policy.ServerConfig{}
+	if kind := cfg.TransportKind(); kind != "" {
+		t.Errorf("TransportKind = %q, want empty for unconfigured", kind)
+	}
+}

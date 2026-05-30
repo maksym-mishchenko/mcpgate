@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -21,6 +22,18 @@ func Load(path string) (*Config, error) {
 	if cfg.Mode == "" {
 		cfg.Mode = "observe"
 	}
+	
+	// Validate each server has either Command or URL (but not both, not neither).
+	for name, srv := range cfg.Servers {
+		kind := srv.TransportKind()
+		if kind == "" {
+			return nil, fmt.Errorf("server %q: must have either 'command' or 'url'", name)
+		}
+		if len(srv.Command) > 0 && srv.URL != "" {
+			return nil, fmt.Errorf("server %q: cannot have both 'command' and 'url'", name)
+		}
+	}
+	
 	return &cfg, nil
 }
 

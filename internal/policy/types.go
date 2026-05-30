@@ -17,9 +17,22 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Command   []string             `yaml:"command"`
-	Tools     map[string]TargetRule `yaml:"tools"`
-	Resources ResourceRule         `yaml:"resources"`
+	Command     []string             `yaml:"command"`
+	URL         string               `yaml:"url,omitempty"`         // HTTP transport endpoint
+	EgressAllow []string             `yaml:"egress_allow,omitempty"` // hostname allowlist for HTTP transport
+	Tools       map[string]TargetRule `yaml:"tools"`
+	Resources   ResourceRule         `yaml:"resources"`
+}
+
+// TransportKind returns "stdio" if Command is set, "http" if URL is set, or "" if neither.
+func (s ServerConfig) TransportKind() string {
+	if len(s.Command) > 0 {
+		return "stdio"
+	}
+	if s.URL != "" {
+		return "http"
+	}
+	return ""
 }
 
 type TargetRule struct {

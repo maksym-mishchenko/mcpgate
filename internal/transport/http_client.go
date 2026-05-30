@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sync"
 
@@ -39,6 +40,35 @@ func NewHTTPWithClient(endpoint string, client *http.Client) *HTTPTransport {
 		endpoint:   endpoint,
 		httpClient: client,
 	}
+}
+
+// NewHTTPWithEgress creates an HTTPTransport with egress allowlist enforcement.
+// Only hosts in allowedHosts can be dialed; all others are blocked with an error.
+// Host comparison is against the hostname only (no port).
+func NewHTTPWithEgress(endpoint string, allowedHosts []string) *HTTPTransport {
+	allowed := make(map[string]struct{}, len(allowedHosts))
+	for _, h := range allowedHosts {
+		allowed[h] = struct{}{}
+	}
+
+	dialer := &net.Dialer{}
+	dialCtx := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, _, err := net.SplitHostPort(addr)
+		if err != nil {
+			host = addr
+		}
+		if _, ok := allowed[host]; !ok {
+			return nil, fmt.Errorf("egress: host %q not in allowlist", host)
+		}
+		return dialer.DialContext(ctx, network, addr)
+	}
+
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			DialContext: dialCtx,
+		},
+	}
+	return NewHTTPWithClient(endpoint, httpClient)
 }
 
 // Send POST-s the message to the endpoint and stores the response for Recv.

@@ -1,0 +1,42 @@
+# .goreleaser.yaml
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: mcpgate
+    binary: mcpgate
+    main: ./cmd/mcpgate
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: mcpgate
+    name_template: "mcpgate_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

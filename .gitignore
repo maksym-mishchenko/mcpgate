@@ -1,0 +1,6 @@
+mcpgate
+*.db
+*.db-wal
+*.db-shm
+mcpgate.token
+dist/

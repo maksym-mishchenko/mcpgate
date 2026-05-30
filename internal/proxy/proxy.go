@@ -52,7 +52,7 @@ func (p *Proxy) Run(ctx context.Context) {
 			if err := p.cfg.ServerTransport.Send(ctx, msg); err != nil {
 				return
 			}
-			resp, err := p.cfg.ServerTransport.Recv(ctx)
+			resp, err := p.recvServerResponse(ctx)
 			if err != nil {
 				return
 			}
@@ -150,7 +150,7 @@ func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 		if err := p.cfg.ServerTransport.Send(ctx, msg); err != nil {
 			return
 		}
-		resp, err := p.cfg.ServerTransport.Recv(ctx)
+		resp, err := p.recvServerResponse(ctx)
 		if err != nil {
 			return
 		}
@@ -173,6 +173,90 @@ func (p *Proxy) sendError(ctx context.Context, req jsonrpc.Message, message stri
 		Error:   errObj,
 	}
 	p.cfg.AgentTransport.Send(ctx, resp) //nolint:errcheck
+}
+
+// recvServerResponse reads from the server, transparently handling any
+// server-initiated requests (e.g. sampling/createMessage) by applying policy
+// before relaying them to the agent. It returns once the server sends an
+// actual response (Kind == KindResponse) or a non-request frame.
+func (p *Proxy) recvServerResponse(ctx context.Context) (jsonrpc.Message, error) {
+	for {
+		msg, err := p.cfg.ServerTransport.Recv(ctx)
+		if err != nil {
+			return jsonrpc.Message{}, err
+		}
+
+		if msg.Kind() == jsonrpc.KindRequest {
+			if err := p.handleServerRequest(ctx, msg); err != nil {
+				return jsonrpc.Message{}, err
+			}
+			continue
+		}
+
+		return msg, nil
+	}
+}
+
+// handleServerRequest applies policy to a server-initiated request
+// (e.g. sampling/createMessage). On ALLOW it relays to the agent and pumps the
+// agent's reply back to the server. On DENY it sends a JSON-RPC error to the
+// server. Every decision is audited.
+func (p *Proxy) handleServerRequest(ctx context.Context, msg jsonrpc.Message) error {
+	verdict := policy.Evaluate(p.cfg.ServerName, msg.Method, "", nil, p.cfg.PolicyConfig)
+
+	slog.Info("verdict",
+		"server", p.cfg.ServerName,
+		"method", msg.Method,
+		"direction", "server->agent",
+		"verdict", verdict,
+		"reason", "policy",
+	)
+
+	entry := audit.Entry{
+		Method:  msg.Method,
+		Server:  p.cfg.ServerName,
+		Name:    "",
+		Args:    "",
+		Verdict: verdictStr(verdict),
+		Reason:  "policy",
+	}
+	if err := p.cfg.AuditStore.Append(entry); err != nil {
+		slog.Error("audit write failed — denying reverse call", "err", err)
+		p.sendServerError(ctx, msg, "audit unavailable — call denied")
+		return nil
+	}
+	if p.cfg.Notifier != nil {
+		p.cfg.Notifier.Broadcast("audit", entry)
+	}
+
+	if verdict != policy.VerdictAllow {
+		p.sendServerError(ctx, msg, "denied by policy")
+		return nil
+	}
+
+	if err := p.cfg.AgentTransport.Send(ctx, msg); err != nil {
+		return err
+	}
+	reply, err := p.cfg.AgentTransport.Recv(ctx)
+	if err != nil {
+		return err
+	}
+	return p.cfg.ServerTransport.Send(ctx, reply)
+}
+
+// sendServerError sends a JSON-RPC error response to the server, addressed to
+// the server-initiated request's ID.
+func (p *Proxy) sendServerError(ctx context.Context, req jsonrpc.Message, message string) {
+	errObj, _ := json.Marshal(map[string]any{
+		"code":    -32001,
+		"message": message,
+	})
+	resp := jsonrpc.Message{
+		JSONRPC: "2.0",
+		ID:      req.ID,
+		Error:   errObj,
+	}
+	p.cfg.ServerTransport.Send(ctx, resp) //nolint:errcheck
 }
 
 func extractName(msg jsonrpc.Message) string {

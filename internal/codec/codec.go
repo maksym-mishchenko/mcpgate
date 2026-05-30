@@ -13,6 +13,7 @@ import (
 var gatedMethods = map[string]bool{
 	"tools/call":     true,
 	"resources/read": true,
+	"prompts/get":    true,
 }
 
 // IsGated reports whether a message's method requires policy enforcement.

@@ -317,3 +317,232 @@ func TestAskTimeoutDenies(t *testing.T) {
 		t.Error("expected JSON-RPC error after timeout")
 	}
 }
+
+// lastJSONLine returns the last non-empty newline-delimited JSON value in data.
+func lastJSONLine(data []byte) []byte {
+	lines := bytes.Split(bytes.TrimSpace(data), []byte("\n"))
+	for i := len(lines) - 1; i >= 0; i-- {
+		if len(bytes.TrimSpace(lines[i])) > 0 {
+			return bytes.TrimSpace(lines[i])
+		}
+	}
+	return nil
+}
+
+func TestSamplingAllowedRelaysToAgent(t *testing.T) {
+	// Agent sends tools/call (ALLOW); server first sends sampling/createMessage,
+	// then the real tool response. Proxy must relay the sampling request to the
+	// agent, pump the agent's reply back to the server, then deliver the tool
+	// response to the agent.
+	toolCall := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{}}}` + "\n"
+	agentSamplingReply := `{"jsonrpc":"2.0","id":99,"result":{"content":"llm response"}}` + "\n"
+
+	samplingReq := `{"jsonrpc":"2.0","id":99,"method":"sampling/createMessage","params":{"messages":[]}}` + "\n"
+	toolResp := `{"jsonrpc":"2.0","id":1,"result":{"content":"file content"}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(toolCall+agentSamplingReply), &agentOut)
+
+	var serverOut bytes.Buffer
+	serverIn := transport.NewStdio(strings.NewReader(samplingReq+toolResp), &serverOut)
+
+	cfg := &policy.Config{
+		Mode:    "enforce",
+		Default: policy.AllowFalse,
+		Servers: map[string]policy.ServerConfig{
+			"fs": {
+				Command: []string{"echo"},
+				Tools: map[string]policy.TargetRule{
+					"read_file": {Allow: policy.AllowTrue},
+				},
+				Sampling: &policy.SamplingRule{Allow: true},
+			},
+		},
+	}
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    cfg,
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	// sampling/createMessage request must have reached the agent.
+	if !bytes.Contains(agentOut.Bytes(), []byte("sampling/createMessage")) {
+		t.Errorf("sampling request did not reach agent; agent output: %s", agentOut.Bytes())
+	}
+	// Final tool response must have reached the agent.
+	if !bytes.Contains(agentOut.Bytes(), []byte("file content")) {
+		t.Errorf("tool response did not reach agent; agent output: %s", agentOut.Bytes())
+	}
+	// Agent's reply to sampling must have reached the server.
+	if !bytes.Contains(serverOut.Bytes(), []byte("llm response")) {
+		t.Errorf("agent sampling reply did not reach server; server output: %s", serverOut.Bytes())
+	}
+	// Audit entry for sampling must be ALLOW.
+	var foundAllow bool
+	for _, e := range fa.entries {
+		if e.Method == "sampling/createMessage" && e.Verdict == "ALLOW" {
+			foundAllow = true
+		}
+	}
+	if !foundAllow {
+		t.Errorf("no ALLOW audit entry for sampling/createMessage; entries: %+v", fa.entries)
+	}
+}
+
+func TestSamplingDeniedSendsServerError(t *testing.T) {
+	// No Sampling rule → default deny. Server sends sampling/createMessage;
+	// proxy must send a JSON-RPC error back to the server, NOT relay to agent.
+	toolCall := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{}}}` + "\n"
+	samplingReq := `{"jsonrpc":"2.0","id":99,"method":"sampling/createMessage","params":{}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(toolCall), &agentOut)
+
+	var serverOut bytes.Buffer
+	serverIn := transport.NewStdio(strings.NewReader(samplingReq), &serverOut)
+
+	cfg := &policy.Config{
+		Mode:    "enforce",
+		Default: policy.AllowFalse,
+		Servers: map[string]policy.ServerConfig{
+			"fs": {
+				Command: []string{"echo"},
+				Tools: map[string]policy.TargetRule{
+					"read_file": {Allow: policy.AllowTrue},
+				},
+				// No Sampling rule → DENY
+			},
+		},
+	}
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    cfg,
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	// Server must have received a JSON-RPC error (last line of server output).
+	assertJSONRPCError(t, lastJSONLine(serverOut.Bytes()), -32001)
+
+	// sampling/createMessage must NOT have reached the agent.
+	if bytes.Contains(agentOut.Bytes(), []byte("sampling/createMessage")) {
+		t.Error("sampling request must not reach agent on deny")
+	}
+
+	// Audit must record a DENY for sampling/createMessage.
+	var foundDeny bool
+	for _, e := range fa.entries {
+		if e.Method == "sampling/createMessage" && e.Verdict == "DENY" {
+			foundDeny = true
+		}
+	}
+	if !foundDeny {
+		t.Errorf("no DENY audit entry for sampling/createMessage; entries: %+v", fa.entries)
+	}
+}
+
+func TestPromptsGetGated(t *testing.T) {
+	t.Run("allow", func(t *testing.T) {
+		agentMsg := `{"jsonrpc":"2.0","id":5,"method":"prompts/get","params":{"name":"my_prompt"}}` + "\n"
+		serverResp := `{"jsonrpc":"2.0","id":5,"result":{"description":"A prompt"}}` + "\n"
+
+		var agentOut bytes.Buffer
+		agentIn := transport.NewStdio(strings.NewReader(agentMsg), &agentOut)
+		serverIn := transport.NewStdio(strings.NewReader(serverResp), &bytes.Buffer{})
+
+		cfg := &policy.Config{
+			Mode:    "enforce",
+			Default: policy.AllowFalse,
+			Servers: map[string]policy.ServerConfig{
+				"fs": {
+					Command: []string{"echo"},
+					Prompts: &policy.PromptsRule{Allow: true},
+				},
+			},
+		}
+
+		fa := &fakeAudit{}
+		coord := approval.New()
+
+		p := proxy.New(proxy.Config{
+			AgentTransport:  agentIn,
+			ServerTransport: serverIn,
+			PolicyConfig:    cfg,
+			Coordinator:     coord,
+			AuditStore:      fa,
+			ServerName:      "fs",
+		})
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		p.Run(ctx)
+
+		if !bytes.Contains(agentOut.Bytes(), []byte("A prompt")) {
+			t.Errorf("agent did not receive prompt response; got: %s", agentOut.Bytes())
+		}
+		if len(fa.entries) == 0 || fa.entries[0].Verdict != "ALLOW" {
+			t.Errorf("expected ALLOW audit entry; entries: %+v", fa.entries)
+		}
+	})
+
+	t.Run("deny", func(t *testing.T) {
+		agentMsg := `{"jsonrpc":"2.0","id":6,"method":"prompts/get","params":{"name":"my_prompt"}}` + "\n"
+
+		var agentOut bytes.Buffer
+		agentIn := transport.NewStdio(strings.NewReader(agentMsg), &agentOut)
+		serverIn := transport.NewStdio(strings.NewReader(""), &bytes.Buffer{})
+
+		cfg := &policy.Config{
+			Mode:    "enforce",
+			Default: policy.AllowFalse,
+			Servers: map[string]policy.ServerConfig{
+				"fs": {
+					Command: []string{"echo"},
+					// No Prompts rule → DENY
+				},
+			},
+		}
+
+		fa := &fakeAudit{}
+		coord := approval.New()
+
+		p := proxy.New(proxy.Config{
+			AgentTransport:  agentIn,
+			ServerTransport: serverIn,
+			PolicyConfig:    cfg,
+			Coordinator:     coord,
+			AuditStore:      fa,
+			ServerName:      "fs",
+		})
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		p.Run(ctx)
+
+		assertJSONRPCError(t, agentOut.Bytes(), -32001)
+		if len(fa.entries) == 0 || fa.entries[0].Verdict != "DENY" {
+			t.Errorf("expected DENY audit entry; entries: %+v", fa.entries)
+		}
+	})
+}

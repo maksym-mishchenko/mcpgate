@@ -29,7 +29,8 @@ func TestReadClassifiesGatedMethods(t *testing.T) {
 	}{
 		{`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{}}`, true},
 		{`{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{}}`, true},
-		{`{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}`, false},
+		{`{"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{}}`, true},
+		{`{"jsonrpc":"2.0","id":4,"method":"tools/list","params":{}}`, false},
 		{`{"jsonrpc":"2.0","method":"notifications/message","params":{}}`, false},
 	}
 	for _, c := range cases {

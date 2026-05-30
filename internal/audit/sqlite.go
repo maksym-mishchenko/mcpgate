@@ -1,11 +1,13 @@
 package audit
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +19,7 @@ import (
 type SQLiteStore struct {
 	db        *sql.DB
 	mu        sync.Mutex // serialises all writes (hash chain requires ordering)
+	hmacKey   []byte     // optional 32-byte key for HMAC-signed rows
 	injectErr bool       // test injection
 }
 
@@ -32,6 +35,21 @@ func Open(path string) (*SQLiteStore, error) {
 	}
 	return &SQLiteStore{db: db}, nil
 }
+
+// OpenWithHMAC opens the audit database with an HMAC key for signed rows.
+// key must be exactly 32 bytes.
+func OpenWithHMAC(path string, key []byte) (*SQLiteStore, error) {
+	if len(key) != 32 {
+		return nil, fmt.Errorf("audit: HMAC key must be 32 bytes, got %d", len(key))
+	}
+	s, err := Open(path)
+	if err != nil {
+		return nil, err
+	}
+	s.hmacKey = key
+	return s, nil
+}
+
 
 func migrate(db *sql.DB) error {
 	// v0.1: initial schema
@@ -98,10 +116,18 @@ func (s *SQLiteStore) Append(e Entry) error {
 	h := sha256.Sum256(combined)
 	hashHex := hex.EncodeToString(h[:])
 
+	hmacSig := ""
+	if s.hmacKey != nil {
+		input := strconv.FormatInt(seq, 10) + ":" + string(entryBytes)
+		mac := hmac.New(sha256.New, s.hmacKey)
+		mac.Write([]byte(input))
+		hmacSig = hex.EncodeToString(mac.Sum(nil))
+	}
+
 	_, err = s.db.Exec(
-		`INSERT INTO audit_log(seq,method,server,name,args,verdict,reason,ts_unix,hash,status)
-		 VALUES(?,?,?,?,?,?,?,?,?,?)`,
-		seq, e.Method, e.Server, e.Name, e.Args, e.Verdict, e.Reason, e.Ts.Unix(), hashHex, "DONE",
+		`INSERT INTO audit_log(seq,method,server,name,args,verdict,reason,ts_unix,hash,status,hmac_sig)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		seq, e.Method, e.Server, e.Name, e.Args, e.Verdict, e.Reason, e.Ts.Unix(), hashHex, "DONE", hmacSig,
 	)
 	return err
 }
@@ -121,7 +147,7 @@ func (s *SQLiteStore) lastHashAndSeq() (string, int64, error) {
 // VerifyChain recomputes every hash and returns false if any mismatch is found.
 func (s *SQLiteStore) VerifyChain() (bool, error) {
 	rows, err := s.db.Query(
-		`SELECT seq,method,server,name,args,verdict,reason,ts_unix,hash FROM audit_log ORDER BY seq`)
+		`SELECT seq,method,server,name,args,verdict,reason,ts_unix,hash,hmac_sig FROM audit_log ORDER BY seq`)
 	if err != nil {
 		return false, err
 	}
@@ -130,9 +156,9 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 	prevHash := ""
 	for rows.Next() {
 		var seq, ts int64
-		var method, server, name, args, verdict, reason, storedHash string
+		var method, server, name, args, verdict, reason, storedHash, storedHMACsig string
 		if err := rows.Scan(&seq, &method, &server, &name, &args,
-			&verdict, &reason, &ts, &storedHash); err != nil {
+			&verdict, &reason, &ts, &storedHash, &storedHMACsig); err != nil {
 			return false, err
 		}
 		fields := map[string]any{
@@ -146,6 +172,15 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 		computed := hex.EncodeToString(h[:])
 		if computed != storedHash {
 			return false, nil
+		}
+		if s.hmacKey != nil {
+			input := strconv.FormatInt(seq, 10) + ":" + string(entryBytes)
+			mac := hmac.New(sha256.New, s.hmacKey)
+			mac.Write([]byte(input))
+			expectedSig := hex.EncodeToString(mac.Sum(nil))
+			if expectedSig != storedHMACsig {
+				return false, nil
+			}
 		}
 		prevHash = storedHash
 	}

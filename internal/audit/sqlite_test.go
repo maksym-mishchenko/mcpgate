@@ -113,6 +113,86 @@ func TestRecent(t *testing.T) {
 	}
 }
 
+func TestHMACKeyedChain(t *testing.T) {
+	dir := t.TempDir()
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	store, err := audit.OpenWithHMAC(filepath.Join(dir, "test.db"), key)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer store.Close()
+
+	for i := 0; i < 3; i++ {
+		if err := store.Append(audit.Entry{
+			Method:  "tools/call",
+			Server:  "fs",
+			Name:    fmt.Sprintf("tool_%d", i),
+			Verdict: "ALLOW",
+		}); err != nil {
+			t.Fatalf("append %d: %v", i, err)
+		}
+	}
+
+	ok, err := store.VerifyChain()
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if !ok {
+		t.Error("chain should be valid with correct key")
+	}
+}
+
+func TestHMACWrongKeyFails(t *testing.T) {
+	dir := t.TempDir()
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	store, err := audit.OpenWithHMAC(filepath.Join(dir, "test.db"), key)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	store.Append(audit.Entry{Method: "tools/call", Server: "fs", Name: "tool", Verdict: "ALLOW"}) //nolint:errcheck
+	store.Close()
+
+	wrongKey := make([]byte, 32)
+	store2, err := audit.OpenWithHMAC(filepath.Join(dir, "test.db"), wrongKey)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer store2.Close()
+
+	ok, err := store2.VerifyChain()
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if ok {
+		t.Error("chain should fail with wrong key")
+	}
+}
+
+func TestNoHMACBackwardCompatible(t *testing.T) {
+	dir := t.TempDir()
+	store, err := audit.Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer store.Close()
+
+	store.Append(audit.Entry{Method: "tools/call", Server: "fs", Name: "tool", Verdict: "ALLOW"}) //nolint:errcheck
+
+	ok, err := store.VerifyChain()
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if !ok {
+		t.Error("non-HMAC chain should still verify")
+	}
+}
+
 func TestHMACSigColumnExists(t *testing.T) {
 	s, cleanup := tempDB(t)
 	defer cleanup()

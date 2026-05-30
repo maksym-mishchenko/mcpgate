@@ -1,0 +1,63 @@
+# examples/simple-policy.yaml
+#
+# A minimal but realistic policy for a filesystem MCP server.
+# This policy allows read_file within a safe directory, requires human
+# approval for write_file, and hard-denies delete_file and anything else.
+#
+# Usage:
+#   export MCPGATE_TOKEN=$(openssl rand -hex 32)
+#   mcpgate --config examples/simple-policy.yaml -- /usr/local/bin/mcp-filesystem --root /home/user/safe
+
+version: 1
+mode: enforce    # "observe" to log-only without blocking (for discovery)
+default: "false" # deny anything not explicitly listed
+
+servers:
+  # The key here must match args[0] (the executable name) passed after "--".
+  # If you run: mcpgate ... -- /usr/local/bin/mcp-filesystem
+  # then the server name is "/usr/local/bin/mcp-filesystem".
+  # Use the basename for readability by symlinking or aliasing the binary.
+  mcp-filesystem:
+    # "command" is informational — mcpgate spawns whatever comes after "--" on
+    # the CLI. This field documents the intended invocation.
+    command: ["/usr/local/bin/mcp-filesystem", "--root", "/home/user/safe"]
+
+    tools:
+      # read_file: allowed, but only within the safe directory.
+      read_file:
+        allow: "true"
+        constraints:
+          path:
+            within: ["/home/user/safe"]
+
+      # write_file: requires human approval before executing.
+      # NOTE: In v0.1, "ask" is treated as "false" (deny). Interactive
+      # approval UI is planned for v0.2.
+      write_file:
+        allow: ask
+        constraints:
+          path:
+            within: ["/home/user/safe"]
+
+      # list_directory: allowed, constrained to safe root.
+      list_directory:
+        allow: "true"
+        constraints:
+          path:
+            within: ["/home/user/safe"]
+
+      # delete_file: hard deny — no exceptions.
+      delete_file:
+        allow: "false"
+
+      # create_directory: hard deny.
+      create_directory:
+        allow: "false"
+
+      # move_file: hard deny — could be used to move files out of safe root.
+      move_file:
+        allow: "false"
+
+    # Resources exposed via resources/read (e.g. file:// URIs).
+    resources:
+      allow: "true"

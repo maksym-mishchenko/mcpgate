@@ -462,6 +462,83 @@ func TestSamplingDeniedSendsServerError(t *testing.T) {
 	}
 }
 
+func TestServerNotificationRelayedThenResponse(t *testing.T) {
+	// Agent sends tools/call (ALLOW); server first sends a notification
+	// (e.g. notifications/progress, no ID), then the actual tool response.
+	// Proxy must relay the notification to the agent AND deliver the response.
+	toolCall := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{}}}` + "\n"
+
+	notif := `{"jsonrpc":"2.0","method":"notifications/progress","params":{"progress":50,"total":100}}` + "\n"
+	toolResp := `{"jsonrpc":"2.0","id":1,"result":{"content":"file content"}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(toolCall), &agentOut)
+
+	var serverOut bytes.Buffer
+	serverIn := transport.NewStdio(strings.NewReader(notif+toolResp), &serverOut)
+
+	cfg := &policy.Config{
+		Mode:    "enforce",
+		Default: policy.AllowFalse,
+		Servers: map[string]policy.ServerConfig{
+			"fs": {
+				Command: []string{"echo"},
+				Tools: map[string]policy.TargetRule{
+					"read_file": {Allow: policy.AllowTrue},
+				},
+			},
+		},
+	}
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    cfg,
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	// Notification must have reached the agent.
+	if !bytes.Contains(agentOut.Bytes(), []byte("notifications/progress")) {
+		t.Errorf("notification did not reach agent; agent output: %s", agentOut.Bytes())
+	}
+	// Notification must have reached the agent before the response (check order).
+	agentOutputStr := string(agentOut.Bytes())
+	notifIdx := strings.Index(agentOutputStr, "notifications/progress")
+	respIdx := strings.Index(agentOutputStr, "file content")
+	if notifIdx == -1 {
+		t.Error("notification not found in agent output")
+	}
+	if respIdx == -1 {
+		t.Error("response not found in agent output")
+	}
+	if notifIdx != -1 && respIdx != -1 && notifIdx >= respIdx {
+		t.Error("notification must reach agent before the response")
+	}
+	// Response must have reached the agent.
+	if !bytes.Contains(agentOut.Bytes(), []byte("file content")) {
+		t.Errorf("tool response did not reach agent; agent output: %s", agentOut.Bytes())
+	}
+	// Only one audit entry: the tools/call, not the notification.
+	if len(fa.entries) != 1 {
+		t.Errorf("expected 1 audit entry (tools/call), got %d: %+v", len(fa.entries), fa.entries)
+	}
+	if fa.entries[0].Method != "tools/call" {
+		t.Errorf("audit entry method = %q, want tools/call", fa.entries[0].Method)
+	}
+	if fa.entries[0].Verdict != "ALLOW" {
+		t.Errorf("audit verdict = %q, want ALLOW", fa.entries[0].Verdict)
+	}
+}
+
 func TestPromptsGetGated(t *testing.T) {
 	t.Run("allow", func(t *testing.T) {
 		agentMsg := `{"jsonrpc":"2.0","id":5,"method":"prompts/get","params":{"name":"my_prompt"}}` + "\n"

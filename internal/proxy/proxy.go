@@ -177,8 +177,9 @@ func (p *Proxy) sendError(ctx context.Context, req jsonrpc.Message, message stri
 
 // recvServerResponse reads from the server, transparently handling any
 // server-initiated requests (e.g. sampling/createMessage) by applying policy
-// before relaying them to the agent. It returns once the server sends an
-// actual response (Kind == KindResponse) or a non-request frame.
+// before relaying them to the agent. It also relays any notifications (e.g.
+// progress updates) to the agent. It returns once the server sends an
+// actual response (a frame that is neither a request nor a notification).
 func (p *Proxy) recvServerResponse(ctx context.Context) (jsonrpc.Message, error) {
 	for {
 		msg, err := p.cfg.ServerTransport.Recv(ctx)
@@ -186,14 +187,23 @@ func (p *Proxy) recvServerResponse(ctx context.Context) (jsonrpc.Message, error)
 			return jsonrpc.Message{}, err
 		}
 
-		if msg.Kind() == jsonrpc.KindRequest {
+		switch msg.Kind() {
+		case jsonrpc.KindRequest:
+			// Server-initiated request (e.g. sampling/createMessage) → apply policy.
 			if err := p.handleServerRequest(ctx, msg); err != nil {
 				return jsonrpc.Message{}, err
 			}
 			continue
+		case jsonrpc.KindNotification:
+			// Relay server notifications (e.g. progress) to the agent and keep
+			// waiting for the actual response.
+			if err := p.cfg.AgentTransport.Send(ctx, msg); err != nil {
+				return jsonrpc.Message{}, err
+			}
+			continue
+		default:
+			return msg, nil
 		}
-
-		return msg, nil
 	}
 }
 

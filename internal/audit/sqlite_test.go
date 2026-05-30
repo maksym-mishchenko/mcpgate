@@ -112,3 +112,29 @@ func TestRecent(t *testing.T) {
 		t.Errorf("first entry name = %q, want tool_4", entries[0].Name)
 	}
 }
+
+func TestHMACSigColumnExists(t *testing.T) {
+	s, cleanup := tempDB(t)
+	defer cleanup()
+
+	// Should be able to append without error.
+	if err := s.Append(audit.Entry{
+		Method:  "tools/call",
+		Server:  "fs",
+		Name:    "read_file",
+		Verdict: "ALLOW",
+	}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	// Verify the column exists by querying it.
+	var sig string
+	err := s.GetDB().QueryRow(`SELECT hmac_sig FROM audit_log WHERE seq=1`).Scan(&sig)
+	if err != nil {
+		t.Fatalf("hmac_sig column missing or query failed: %v", err)
+	}
+	// Default value is empty string for non-HMAC entries.
+	if sig != "" {
+		t.Errorf("hmac_sig = %q, want empty for non-HMAC entry", sig)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,7 +34,8 @@ func Open(path string) (*SQLiteStore, error) {
 }
 
 func migrate(db *sql.DB) error {
-	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS audit_log (
+	// v0.1: initial schema
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS audit_log (
 		id       INTEGER PRIMARY KEY AUTOINCREMENT,
 		seq      INTEGER UNIQUE NOT NULL,
 		method   TEXT,
@@ -45,8 +47,21 @@ func migrate(db *sql.DB) error {
 		ts_unix  INTEGER,
 		hash     TEXT NOT NULL,
 		status   TEXT NOT NULL DEFAULT 'DONE'
-	)`)
-	return err
+	)`); err != nil {
+		return err
+	}
+	// v0.3: HMAC signature per row (empty string = no HMAC)
+	_, err := db.Exec(`ALTER TABLE audit_log ADD COLUMN hmac_sig TEXT NOT NULL DEFAULT ""`)
+	if err != nil && !isSQLiteAlreadyExists(err) {
+		return err
+	}
+	return nil
+}
+
+// isSQLiteAlreadyExists returns true when the ALTER TABLE fails because the column
+// already exists — this is the standard incremental migration pattern for SQLite.
+func isSQLiteAlreadyExists(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "duplicate column name")
 }
 
 // Append writes an entry to the log. Fail-closed: any error must cause the caller to DENY.
@@ -138,6 +153,9 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 }
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }
+
+// GetDB returns the underlying *sql.DB for testing purposes only.
+func (s *SQLiteStore) GetDB() *sql.DB { return s.db }
 
 // Recent returns the n most recent audit entries, newest first.
 func (s *SQLiteStore) Recent(n int) ([]Entry, error) {

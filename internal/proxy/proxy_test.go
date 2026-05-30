@@ -3,6 +3,7 @@ package proxy_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -45,6 +46,23 @@ func makeCfg(mode string) *policy.Config {
 	}
 }
 
+// assertJSONRPCError unmarshals data and asserts the JSON-RPC error code equals wantCode.
+func assertJSONRPCError(t *testing.T, data []byte, wantCode int) {
+	t.Helper()
+	var resp map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(data), &resp); err != nil {
+		t.Fatalf("output not valid JSON: %v\nraw: %s", err, data)
+	}
+	errObj, ok := resp["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("no error field in response: %s", data)
+	}
+	code, _ := errObj["code"].(float64)
+	if int(code) != wantCode {
+		t.Errorf("error code = %v, want %d", code, wantCode)
+	}
+}
+
 func TestAllowedCallForwarded(t *testing.T) {
 	agentMsg := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{}}}` + "\n"
 	serverResp := `{"jsonrpc":"2.0","id":1,"result":{"content":"hello"}}` + "\n"
@@ -75,6 +93,9 @@ func TestAllowedCallForwarded(t *testing.T) {
 	}
 	if fa.entries[0].Verdict != "ALLOW" {
 		t.Errorf("verdict = %q, want ALLOW", fa.entries[0].Verdict)
+	}
+	if !bytes.Contains(agentOut.Bytes(), []byte("hello")) {
+		t.Errorf("agent output missing server response content; got: %s", agentOut.Bytes())
 	}
 }
 
@@ -107,10 +128,8 @@ func TestDeniedCallNotForwarded(t *testing.T) {
 	if fa.entries[0].Verdict != "DENY" {
 		t.Errorf("verdict = %q, want DENY", fa.entries[0].Verdict)
 	}
-	// The agent output must contain a JSON-RPC error, not the server's response.
-	if !bytes.Contains(agentOut.Bytes(), []byte("error")) {
-		t.Error("agent output missing JSON-RPC error for denied call")
-	}
+	// The agent output must contain a JSON-RPC error with code -32001, not the server's response.
+	assertJSONRPCError(t, agentOut.Bytes(), -32001)
 }
 
 func TestAuditWriteFailureDenies(t *testing.T) {
@@ -135,7 +154,72 @@ func TestAuditWriteFailureDenies(t *testing.T) {
 	defer cancel()
 	p.Run(ctx)
 
-	if !bytes.Contains(agentOut.Bytes(), []byte("error")) {
-		t.Error("audit failure did not produce a JSON-RPC error (not fail-closed)")
+	assertJSONRPCError(t, agentOut.Bytes(), -32001)
+}
+
+func TestNonGatedPassthrough(t *testing.T) {
+	// "initialize" is not a gated method (not tools/call or resources/read).
+	agentMsg := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}` + "\n"
+	serverResp := `{"jsonrpc":"2.0","id":1,"result":{"capabilities":{}}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(agentMsg), &agentOut)
+	serverIn := transport.NewStdio(strings.NewReader(serverResp), &bytes.Buffer{})
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    makeCfg("enforce"),
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	if !bytes.Contains(agentOut.Bytes(), []byte("capabilities")) {
+		t.Errorf("agent output missing server response; got: %s", agentOut.Bytes())
 	}
+	if len(fa.entries) != 0 {
+		t.Errorf("expected no audit entries for non-gated call, got %d", len(fa.entries))
+	}
+}
+
+func TestAskCollapsedToDeny(t *testing.T) {
+	// "unknown_tool" is not in config; Default is AllowAsk → VerdictUnknown.
+	// In enforce mode this must collapse to DENY.
+	agentMsg := `{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"unknown_tool","arguments":{}}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(agentMsg), &agentOut)
+	serverIn := transport.NewStdio(strings.NewReader(""), &bytes.Buffer{})
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    makeCfg("enforce"),
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	if len(fa.entries) == 0 {
+		t.Fatal("no audit entries recorded")
+	}
+	if fa.entries[0].Verdict != "DENY" {
+		t.Errorf("verdict = %q, want DENY (ask should collapse in enforce mode)", fa.entries[0].Verdict)
+	}
+	assertJSONRPCError(t, agentOut.Bytes(), -32001)
 }

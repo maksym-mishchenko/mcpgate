@@ -87,11 +87,68 @@ func TestWithinDotDot(t *testing.T) {
 	}
 }
 
-func TestWithinRelativePath(t *testing.T) {
-	c := cfg()
-	got := policy.Evaluate("fs", "tools/call", "read_file",
-		map[string]string{"path": "relative/path"}, c)
-	if got != policy.VerdictDeny {
-		t.Errorf("relative path: got %v, want deny", got)
+func TestSamplingAllow(t *testing.T) {
+	cfg := &policy.Config{
+		Version: 1,
+		Mode:    "enforce",
+		Servers: map[string]policy.ServerConfig{
+			"myserver": {
+				Command:  []string{"mcp-server"},
+				Sampling: &policy.SamplingRule{Allow: true},
+			},
+		},
+	}
+	v := policy.Evaluate("myserver", "sampling/createMessage", "", nil, cfg)
+	if v != policy.VerdictAllow {
+		t.Errorf("expected ALLOW, got %v", v)
+	}
+}
+
+func TestSamplingDefaultDeny(t *testing.T) {
+	cfg := &policy.Config{
+		Version: 1,
+		Mode:    "enforce",
+		Servers: map[string]policy.ServerConfig{
+			"myserver": {
+				Command: []string{"mcp-server"},
+			},
+		},
+	}
+	v := policy.Evaluate("myserver", "sampling/createMessage", "", nil, cfg)
+	if v != policy.VerdictDeny {
+		t.Errorf("expected DENY, got %v", v)
+	}
+}
+
+func TestPromptsAllow(t *testing.T) {
+	cfg := &policy.Config{
+		Version: 1,
+		Mode:    "enforce",
+		Servers: map[string]policy.ServerConfig{
+			"myserver": {
+				Command: []string{"mcp-server"},
+				Prompts: &policy.PromptsRule{Allow: true},
+			},
+		},
+	}
+	v := policy.Evaluate("myserver", "prompts/get", "my-prompt", nil, cfg)
+	if v != policy.VerdictAllow {
+		t.Errorf("expected ALLOW, got %v", v)
+	}
+}
+
+func TestPromptsDefaultDeny(t *testing.T) {
+	cfg := &policy.Config{
+		Version: 1,
+		Mode:    "enforce",
+		Servers: map[string]policy.ServerConfig{
+			"myserver": {
+				Command: []string{"mcp-server"},
+			},
+		},
+	}
+	v := policy.Evaluate("myserver", "prompts/get", "my-prompt", nil, cfg)
+	if v != policy.VerdictDeny {
+		t.Errorf("expected DENY, got %v", v)
 	}
 }

@@ -52,6 +52,18 @@ func Evaluate(server, method, name string, args map[string]string, cfg *Config) 
 	case "resources/read":
 		return applyAllow(srv.Resources.Allow)
 
+	case "sampling/createMessage":
+		if srv.Sampling != nil && srv.Sampling.Allow {
+			return VerdictAllow
+		}
+		return VerdictDeny
+
+	case "prompts/get":
+		if srv.Prompts != nil && srv.Prompts.Allow {
+			return VerdictAllow
+		}
+		return VerdictDeny
+
 	default:
 		return defaultVerdict(cfg.Default)
 	}

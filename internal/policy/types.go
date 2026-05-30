@@ -17,11 +17,23 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Command     []string             `yaml:"command"`
-	URL         string               `yaml:"url,omitempty"`         // HTTP transport endpoint
-	EgressAllow []string             `yaml:"egress_allow,omitempty"` // hostname allowlist for HTTP transport
+	Command     []string              `yaml:"command"`
+	URL         string                `yaml:"url,omitempty"`          // HTTP transport endpoint
+	EgressAllow []string              `yaml:"egress_allow,omitempty"` // hostname allowlist for HTTP transport
 	Tools       map[string]TargetRule `yaml:"tools"`
-	Resources   ResourceRule         `yaml:"resources"`
+	Resources   ResourceRule          `yaml:"resources"`
+	Sampling    *SamplingRule         `yaml:"sampling,omitempty"`
+	Prompts     *PromptsRule          `yaml:"prompts,omitempty"`
+}
+
+// SamplingRule controls whether this server may send sampling/createMessage requests to the agent.
+type SamplingRule struct {
+	Allow bool `yaml:"allow"`
+}
+
+// PromptsRule controls whether the agent may call prompts/get on this server.
+type PromptsRule struct {
+	Allow bool `yaml:"allow"`
 }
 
 // TransportKind returns "stdio" if Command is set, "http" if URL is set, or "" if neither.

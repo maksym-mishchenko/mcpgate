@@ -1,56 +1,77 @@
 package web
 
 import (
+	"embed"
 	"encoding/json"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
 
 	"github.com/maksym-mishchenko/mcpgate/internal/approval"
+	"github.com/maksym-mishchenko/mcpgate/internal/audit"
+	"github.com/maksym-mishchenko/mcpgate/internal/event"
 )
+
+//go:embed static
+var staticFiles embed.FS
 
 // Config holds server configuration.
 type Config struct {
-	Token       string
-	Coordinator *approval.Coordinator
+	Token        string
+	Coordinator  *approval.Coordinator
+	AuditQuerier audit.AuditQuerier // optional; nil disables /audit history
 }
 
 // Server is the HTTP server for mcpgate's web UI and approval API.
+// It implements event.Notifier.
 type Server struct {
-	token string
-	coord *approval.Coordinator
-	mux   *http.ServeMux
+	token   string
+	coord   *approval.Coordinator
+	querier audit.AuditQuerier
+	mux     *http.ServeMux
 
 	mu      sync.Mutex
 	clients map[chan []byte]struct{}
+	pending map[string]event.PendingCall
 }
 
-// New creates a new Server with the given config.
+// New creates a new Server.
 func New(cfg Config) *Server {
 	s := &Server{
 		token:   cfg.Token,
 		coord:   cfg.Coordinator,
+		querier: cfg.AuditQuerier,
 		mux:     http.NewServeMux(),
 		clients: make(map[chan []byte]struct{}),
+		pending: make(map[string]event.PendingCall),
 	}
+	// Static UI.
+	sub, _ := fs.Sub(staticFiles, "static")
+	s.mux.Handle("/", http.FileServer(http.FS(sub)))
+	// API endpoints (all require auth).
 	s.mux.HandleFunc("/health", s.auth(s.handleHealth))
 	s.mux.HandleFunc("/approve", s.auth(s.handleApprove))
 	s.mux.HandleFunc("/events", s.auth(s.handleEvents))
+	s.mux.HandleFunc("/pending", s.auth(s.handlePending))
+	s.mux.HandleFunc("/audit", s.auth(s.handleAudit))
 	return s
 }
 
 // Handler returns the http.Handler for use with http.Server.
 func (s *Server) Handler() http.Handler { return s.mux }
 
+// --- event.Notifier implementation ---
+
 // Broadcast sends an SSE event to all connected clients.
-func (s *Server) Broadcast(event string, data any) {
+func (s *Server) Broadcast(evtName string, data any) {
 	payload, err := json.Marshal(data)
 	if err != nil {
 		slog.Error("broadcast marshal failed", "err", err)
 		return
 	}
-	msg := []byte("event: " + event + "\ndata: " + string(payload) + "\n\n")
+	msg := []byte("event: " + evtName + "\ndata: " + string(payload) + "\n\n")
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for ch := range s.clients {
@@ -61,10 +82,24 @@ func (s *Server) Broadcast(event string, data any) {
 	}
 }
 
-// auth is middleware that checks token (Bearer or ?token=) and Host header.
+// AddPending registers a parked call so reconnecting clients can see it.
+func (s *Server) AddPending(key string, c event.PendingCall) {
+	s.mu.Lock()
+	s.pending[key] = c
+	s.mu.Unlock()
+}
+
+// RemovePending removes a parked call once resolved.
+func (s *Server) RemovePending(key string) {
+	s.mu.Lock()
+	delete(s.pending, key)
+	s.mu.Unlock()
+}
+
+// --- auth middleware ---
+
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Host check (anti-DNS-rebinding)
 		host := r.Host
 		if idx := strings.LastIndex(host, ":"); idx != -1 {
 			host = host[:idx]
@@ -73,8 +108,6 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-
-		// Token check
 		token := ""
 		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
 			token = strings.TrimPrefix(auth, "Bearer ")
@@ -85,10 +118,11 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-
 		next(w, r)
 	}
 }
+
+// --- handlers ---
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -154,4 +188,33 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func (s *Server) handlePending(w http.ResponseWriter, _ *http.Request) {
+	s.mu.Lock()
+	calls := make([]event.PendingCall, 0, len(s.pending))
+	for _, c := range s.pending {
+		calls = append(calls, c)
+	}
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(calls) //nolint:errcheck
+}
+
+func (s *Server) handleAudit(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.querier == nil {
+		w.Write([]byte("[]")) //nolint:errcheck
+		return
+	}
+	entries, err := s.querier.Recent(100)
+	if err != nil {
+		slog.Error("audit recent query failed", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if entries == nil {
+		entries = []audit.Entry{}
+	}
+	json.NewEncoder(w).Encode(entries) //nolint:errcheck
 }

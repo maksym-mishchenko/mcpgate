@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/maksym-mishchenko/mcpgate/internal/approval"
+	"github.com/maksym-mishchenko/mcpgate/internal/event"
 	"github.com/maksym-mishchenko/mcpgate/internal/web"
 )
 
@@ -19,7 +20,11 @@ const testToken = "test-secret-token"
 
 func makeServer() *web.Server {
 	coord := approval.New()
-	return web.New(web.Config{Token: testToken, Coordinator: coord})
+	return web.New(web.Config{
+		Token:       testToken,
+		Coordinator: coord,
+		// AuditQuerier: nil (intentional for most tests)
+	})
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -183,5 +188,56 @@ func TestSSEBroadcast(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("SSE event missing broadcast data; lines: %v", lines)
+	}
+}
+
+func TestAddRemovePending(t *testing.T) {
+	s := makeServer()
+
+	s.AddPending("fs:1", event.PendingCall{Key: "fs:1", Name: "read_file"})
+	s.AddPending("fs:2", event.PendingCall{Key: "fs:2", Name: "write_file"})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/pending?token="+testToken, nil)
+	req.Host = "localhost"
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var calls []event.PendingCall
+	if err := json.NewDecoder(rec.Body).Decode(&calls); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(calls) != 2 {
+		t.Errorf("len = %d, want 2", len(calls))
+	}
+
+	s.RemovePending("fs:1")
+
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodGet, "/pending?token="+testToken, nil)
+	req2.Host = "localhost"
+	s.Handler().ServeHTTP(rec2, req2)
+
+	var calls2 []event.PendingCall
+	json.NewDecoder(rec2.Body).Decode(&calls2) //nolint:errcheck
+	if len(calls2) != 1 {
+		t.Errorf("after remove: len = %d, want 1", len(calls2))
+	}
+}
+
+func TestAuditEndpointWithNilQuerier(t *testing.T) {
+	s := makeServer() // no AuditQuerier configured
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/audit?token="+testToken, nil)
+	req.Host = "localhost"
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	body := strings.TrimSpace(rec.Body.String())
+	if body != "[]" {
+		t.Errorf("body = %q, want []", body)
 	}
 }

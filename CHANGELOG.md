@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.3.0 — "Prove what your agent did"
+
+### What's new
+
+- **HMAC-keyed hash chain** — `OpenWithHMAC(path, key)` signs every audit row; `VerifyChain()` validates signatures; wrong key → verification fails
+- **`mcpgate keygen <path>`** — generates a 32-byte HMAC key file (mode 0400); refuses to overwrite
+- **Genesis record** — first-ever startup writes a GENESIS sentinel (seq=1) anchoring the chain; re-open skips if already present
+- **`VerifyGap()`** — detects truncation attacks by scanning for sequence number gaps
+- **Chain export** — `Export(w io.Writer)` writes the full chain as JSON Lines; safe to share without the key
+- **`mcpgate export [--db mcpgate.db] [--out audit.jsonl]`** — exports audit chain to a file or stdout
+- **`VerifyFile(r, key)`** — verifies a JSON Lines export: hash chain + optional HMAC; (false, nil) on tamper detected
+- **`mcpgate verify [--file export.jsonl] [--key audit.key]`** — verifies chain from export file; exits 2 on tamper
+
+### Breaking changes
+
+None (genesis record means fresh DBs start with seq=2 for the first real entry; existing DBs without a genesis row continue to work).
+
 ## v0.2.0 — Human-in-the-Loop Approvals
 
 ### What's new

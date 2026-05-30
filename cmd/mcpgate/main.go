@@ -71,10 +71,6 @@ func main() {
 	flag.Parse()
 
 	serverArgs := flag.Args()
-	if len(serverArgs) == 0 {
-		slog.Error("usage: mcpgate [flags] -- <server-command> [args...]")
-		os.Exit(1)
-	}
 
 	if *token == "" {
 		slog.Error("no token: set --token or MCPGATE_TOKEN env var")
@@ -91,6 +87,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Require at least one server source: policy config or CLI args.
+	if len(cfg.Servers) == 0 && len(serverArgs) == 0 {
+		slog.Error("usage: mcpgate [flags] -- <server-command> [args...] (or define servers: in policy config)")
+		os.Exit(1)
+	}
+
 	// Open audit store.
 	store, err := audit.Open("mcpgate.db")
 	if err != nil {
@@ -99,16 +101,55 @@ func main() {
 	}
 	defer store.Close()
 
-	// Start child process.
-	mgr, err := child.Start(ctx, serverArgs)
-	if err != nil {
-		slog.Error("failed to start child", "err", err, "args", serverArgs)
-		os.Exit(1)
-	}
-	defer mgr.Stop() //nolint:errcheck
-
 	// Approval coordinator.
 	coord := approval.New()
+
+	// Build per-server transports from policy config.
+	// TODO v0.5: support multi-server Router by plumbing Router into proxy.Config.
+	router := proxy.NewRouter()
+	var primaryTransport transport.Transport
+	var primaryName string
+	var primaryChildDone <-chan struct{} // non-nil only when primary server is a stdio child
+
+	for name, srv := range cfg.Servers {
+		var t transport.Transport
+		switch srv.TransportKind() {
+		case "stdio":
+			stdioMgr, startErr := child.Start(ctx, srv.Command)
+			if startErr != nil {
+				slog.Error("failed to start stdio server", "server", name, "err", startErr)
+				os.Exit(1)
+			}
+			defer stdioMgr.Stop() //nolint:errcheck
+			t = stdioMgr.Transport()
+			if primaryTransport == nil {
+				primaryChildDone = stdioMgr.Done()
+			}
+		case "http":
+			t = transport.NewHTTPWithEgress(srv.URL, srv.EgressAllow)
+		default:
+			slog.Warn("server has no transport configured, skipping", "server", name)
+			continue
+		}
+		router.Add(name, t)
+		if primaryTransport == nil {
+			primaryTransport = t
+			primaryName = name
+		}
+	}
+
+	// Fall back to CLI args when no servers are defined in the policy config.
+	if primaryTransport == nil {
+		mgr, startErr := child.Start(ctx, serverArgs)
+		if startErr != nil {
+			slog.Error("failed to start child", "err", startErr, "args", serverArgs)
+			os.Exit(1)
+		}
+		defer mgr.Stop() //nolint:errcheck
+		primaryTransport = mgr.Transport()
+		primaryName = serverArgs[0]
+		primaryChildDone = mgr.Done()
+	}
 
 	// Web server (also serves as the Notifier for the proxy).
 	var querier audit.AuditQuerier
@@ -135,28 +176,30 @@ func main() {
 	// Agent transport = mcpgate's own stdin/stdout.
 	agentTransport := transport.NewStdio(os.Stdin, os.Stdout)
 
-	// Proxy.
+	// Proxy — wired to the primary (first) server transport.
 	p := proxy.New(proxy.Config{
 		AgentTransport:  agentTransport,
-		ServerTransport: mgr.Transport(),
+		ServerTransport: primaryTransport,
 		PolicyConfig:    cfg,
 		Coordinator:     coord,
 		AuditStore:      store,
-		ServerName:      serverArgs[0],
+		ServerName:      primaryName,
 		Notifier:        webSrv,
 		ApprovalTimeout: *approvalTimeout,
 	})
 
-	// Watch for child exit — drain pending approvals and cancel context.
-	go func() {
-		select {
-		case <-mgr.Done():
-			slog.Info("child exited — draining approvals")
-			coord.DrainAll(approval.VerdictDeny)
-			stop()
-		case <-ctx.Done():
-		}
-	}()
+	// Watch for primary child exit — drain pending approvals and cancel context.
+	if primaryChildDone != nil {
+		go func() {
+			select {
+			case <-primaryChildDone:
+				slog.Info("child exited — draining approvals")
+				coord.DrainAll(approval.VerdictDeny)
+				stop()
+			case <-ctx.Done():
+			}
+		}()
+	}
 
 	// Run proxy (blocks until ctx is done or transport error).
 	p.Run(ctx)

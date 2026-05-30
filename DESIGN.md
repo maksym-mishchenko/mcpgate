@@ -117,6 +117,14 @@ transport.Stdio (server-side)
 MCP Server (child process, own process group)
 ```
 
+## v0.2.0
+
+- Interactive approval: `ask` verdicts park the call and push a card to the browser UI
+- Browser dashboard at `GET /` — dark terminal theme, approval cards + live audit feed
+- `/pending` endpoint returns current parked calls (for reconnecting clients)
+- `/audit` endpoint returns last 100 entries from SQLite
+- `--approval-timeout` flag (default 30s); structured `slog` verdict logging
+
 ## What is NOT in v0.1
 
 These are deliberate scope cuts, not oversights:

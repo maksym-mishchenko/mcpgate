@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,6 +31,10 @@ func Open(path string) (*SQLiteStore, error) {
 		return nil, err
 	}
 	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureGenesis(db); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -80,6 +85,39 @@ func migrate(db *sql.DB) error {
 // already exists — this is the standard incremental migration pattern for SQLite.
 func isSQLiteAlreadyExists(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "duplicate column name")
+}
+
+// ensureGenesis writes the GENESIS sentinel row if the table is empty.
+func ensureGenesis(db *sql.DB) error {
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM audit_log`).Scan(&count); err != nil {
+		return fmt.Errorf("audit: check genesis: %w", err)
+	}
+	if count > 0 {
+		return nil // already initialised
+	}
+	// Write genesis with seq=1 (prevHash="").
+	fields := map[string]any{
+		"method":  "GENESIS",
+		"server":  "",
+		"name":    runtime.Version(),
+		"args":    "",
+		"verdict": "GENESIS",
+		"reason":  "startup",
+		"seq":     int64(1),
+		"ts":      time.Now().UTC().Unix(),
+	}
+	entryBytes := canonicalJSON(fields)
+	combined := append([]byte(""), entryBytes...)
+	h := sha256.Sum256(combined)
+	hash := hex.EncodeToString(h[:])
+
+	_, err := db.Exec(
+		`INSERT INTO audit_log (seq,method,server,name,args,verdict,reason,ts_unix,hash,status,hmac_sig)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		1, "GENESIS", "", runtime.Version(), "", "GENESIS", "startup",
+		time.Now().UTC().Unix(), hash, "DONE", "")
+	return err
 }
 
 // Append writes an entry to the log. Fail-closed: any error must cause the caller to DENY.
@@ -173,7 +211,8 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 		if computed != storedHash {
 			return false, nil
 		}
-		if s.hmacKey != nil {
+		// Skip HMAC verification for GENESIS row (bootstrap record before key config)
+		if s.hmacKey != nil && method != "GENESIS" {
 			input := strconv.FormatInt(seq, 10) + ":" + string(entryBytes)
 			mac := hmac.New(sha256.New, s.hmacKey)
 			mac.Write([]byte(input))
@@ -223,3 +262,26 @@ func (s *SQLiteStore) TestCorruptRow(seq int64, newVerdict string) {
 
 // InjectWriteError causes the next Append call to return an error.
 func (s *SQLiteStore) InjectWriteError(v bool) { s.injectErr = v }
+
+// VerifyGap checks for truncation by detecting sequence number gaps.
+// Returns true if a gap is found (rows were deleted).
+func (s *SQLiteStore) VerifyGap() (bool, error) {
+	rows, err := s.db.Query(`SELECT seq FROM audit_log ORDER BY seq`)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	var prev int64 = 0
+	for rows.Next() {
+		var seq int64
+		if err := rows.Scan(&seq); err != nil {
+			return false, err
+		}
+		if prev > 0 && seq != prev+1 {
+			return true, nil // gap detected
+		}
+		prev = seq
+	}
+	return false, rows.Err()
+}

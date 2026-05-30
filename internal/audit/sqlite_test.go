@@ -209,12 +209,89 @@ func TestHMACSigColumnExists(t *testing.T) {
 
 	// Verify the column exists by querying it.
 	var sig string
-	err := s.GetDB().QueryRow(`SELECT hmac_sig FROM audit_log WHERE seq=1`).Scan(&sig)
+	err := s.GetDB().QueryRow(`SELECT hmac_sig FROM audit_log WHERE seq=2`).Scan(&sig)
 	if err != nil {
 		t.Fatalf("hmac_sig column missing or query failed: %v", err)
 	}
 	// Default value is empty string for non-HMAC entries.
 	if sig != "" {
 		t.Errorf("hmac_sig = %q, want empty for non-HMAC entry", sig)
+	}
+}
+
+func TestGenesisRecordCreated(t *testing.T) {
+	dir := t.TempDir()
+	store, err := audit.Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer store.Close()
+
+	// Genesis record should exist after open.
+	var method, verdict string
+	var seq int64
+	err = store.GetDB().QueryRow(`SELECT seq, method, verdict FROM audit_log ORDER BY seq LIMIT 1`).
+		Scan(&seq, &method, &verdict)
+	if err != nil {
+		t.Fatalf("query genesis: %v", err)
+	}
+	if method != "GENESIS" {
+		t.Errorf("method = %q, want GENESIS", method)
+	}
+	if verdict != "GENESIS" {
+		t.Errorf("verdict = %q, want GENESIS", verdict)
+	}
+}
+
+func TestGenesisNotDuplicatedOnReopen(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.db")
+
+	s1, _ := audit.Open(path)
+	s1.Close()
+
+	s2, err := audit.Open(path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer s2.Close()
+
+	var count int
+	s2.GetDB().QueryRow(`SELECT COUNT(*) FROM audit_log WHERE method='GENESIS'`).Scan(&count) //nolint:errcheck
+	if count != 1 {
+		t.Errorf("genesis count = %d, want 1", count)
+	}
+}
+
+func TestGapDetection(t *testing.T) {
+	dir := t.TempDir()
+	store, err := audit.Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer store.Close()
+
+	for i := 0; i < 3; i++ {
+		store.Append(audit.Entry{Method: "tools/call", Server: "fs", Name: "tool", Verdict: "ALLOW"}) //nolint:errcheck
+	}
+
+	// No gaps yet.
+	hasGap, err := store.VerifyGap()
+	if err != nil {
+		t.Fatalf("verifygap: %v", err)
+	}
+	if hasGap {
+		t.Error("expected no gap, got gap")
+	}
+
+	// Create a gap by deleting the middle row (seq 2 out of genesis=1,tool=2,tool=3,tool=4).
+	store.GetDB().Exec(`DELETE FROM audit_log WHERE seq=3`) //nolint:errcheck
+
+	hasGap, err = store.VerifyGap()
+	if err != nil {
+		t.Fatalf("verifygap: %v", err)
+	}
+	if !hasGap {
+		t.Error("expected gap after deletion, got none")
 	}
 }

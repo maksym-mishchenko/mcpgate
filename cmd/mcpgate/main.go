@@ -71,13 +71,11 @@ func main() {
 	// Approval coordinator.
 	coord := approval.New()
 
-	// AuditQuerier — cast if the store supports it.
+	// Web server (also serves as the Notifier for the proxy).
 	var querier audit.AuditQuerier
 	if q, ok := any(store).(audit.AuditQuerier); ok {
 		querier = q
 	}
-
-	// Web server (also implements event.Notifier for the proxy).
 	webSrv := web.New(web.Config{
 		Token:        *token,
 		Coordinator:  coord,

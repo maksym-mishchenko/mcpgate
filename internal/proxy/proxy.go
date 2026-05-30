@@ -5,16 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/maksym-mishchenko/mcpgate/internal/approval"
 	"github.com/maksym-mishchenko/mcpgate/internal/audit"
 	"github.com/maksym-mishchenko/mcpgate/internal/codec"
+	"github.com/maksym-mishchenko/mcpgate/internal/event"
 	"github.com/maksym-mishchenko/mcpgate/internal/jsonrpc"
 	"github.com/maksym-mishchenko/mcpgate/internal/policy"
 	"github.com/maksym-mishchenko/mcpgate/internal/transport"
 )
 
 // Config holds all dependencies for a Proxy instance.
+// All fields except Notifier and ApprovalTimeout are required.
 type Config struct {
 	AgentTransport  transport.Transport
 	ServerTransport transport.Transport
@@ -22,28 +25,30 @@ type Config struct {
 	Coordinator     *approval.Coordinator
 	AuditStore      audit.AuditStore
 	ServerName      string
+	// Notifier receives lifecycle events for the web UI. Nil = disabled.
+	Notifier event.Notifier
+	// ApprovalTimeout is how long to wait for human approval before auto-deny.
+	// Defaults to 30s if zero.
+	ApprovalTimeout time.Duration
 }
 
-// Proxy is the core engine: it reads from the agent, enforces policy, and
+// Proxy is the core engine: reads from the agent, enforces policy, and
 // forwards allowed calls to the MCP server.
+// Run must be called from a single goroutine.
 type Proxy struct {
 	cfg Config
 }
 
 func New(cfg Config) *Proxy { return &Proxy{cfg: cfg} }
 
-// Run reads messages from the agent transport, applies policy, and forwards
-// to the server transport. It returns when ctx is cancelled or either
-// transport returns an error.
+// Run reads from AgentTransport until ctx is cancelled or transport error.
 func (p *Proxy) Run(ctx context.Context) {
 	for {
 		msg, err := p.cfg.AgentTransport.Recv(ctx)
 		if err != nil {
 			return
 		}
-
 		if !codec.IsGated(msg) {
-			// Pass non-gated traffic through untouched.
 			if err := p.cfg.ServerTransport.Send(ctx, msg); err != nil {
 				return
 			}
@@ -54,7 +59,6 @@ func (p *Proxy) Run(ctx context.Context) {
 			p.cfg.AgentTransport.Send(ctx, resp) //nolint:errcheck
 			continue
 		}
-
 		p.handleGated(ctx, msg)
 	}
 }
@@ -64,25 +68,81 @@ func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 	args := extractArgs(msg)
 
 	verdict := policy.Evaluate(p.cfg.ServerName, msg.Method, name, args, p.cfg.PolicyConfig)
+	reason := "policy"
 
-	// UNKNOWN/ASK in enforce mode → deny (interactive approval is v0.2).
-	if verdict == policy.VerdictUnknown || verdict == policy.VerdictAsk {
-		if p.cfg.PolicyConfig.Mode == "enforce" {
+	// For ask/unknown in enforce mode: park for human approval.
+	if (verdict == policy.VerdictAsk || verdict == policy.VerdictUnknown) &&
+		p.cfg.PolicyConfig.Mode == "enforce" {
+
+		key := fmt.Sprintf("%s:%s", p.cfg.ServerName, string(msg.ID))
+		call := event.PendingCall{
+			Key:    key,
+			Server: p.cfg.ServerName,
+			Method: msg.Method,
+			Name:   name,
+			Args:   args,
+			Ts:     time.Now(),
+		}
+		if p.cfg.Notifier != nil {
+			p.cfg.Notifier.AddPending(key, call)
+			p.cfg.Notifier.Broadcast("pending", call)
+		}
+
+		timeout := p.cfg.ApprovalTimeout
+		if timeout == 0 {
+			timeout = 30 * time.Second
+		}
+		tCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+
+		v, err := p.cfg.Coordinator.Park(tCtx, key)
+
+		if p.cfg.Notifier != nil {
+			p.cfg.Notifier.RemovePending(key)
+			src := "human"
+			if err != nil {
+				src = "timeout"
+			}
+			p.cfg.Notifier.Broadcast("resolved", event.Resolved{Key: key, Verdict: v.String(), Source: src})
+		}
+
+		if err != nil {
+			reason = "timeout"
+			verdict = policy.VerdictDeny
+		} else if v == approval.VerdictAllow {
+			reason = "human:allow"
+			verdict = policy.VerdictAllow
+		} else {
+			reason = "human:deny"
 			verdict = policy.VerdictDeny
 		}
 	}
 
-	// Write-ahead audit — fail-closed: any write failure denies the call.
+	slog.Info("verdict",
+		"server", p.cfg.ServerName,
+		"method", msg.Method,
+		"name", name,
+		"verdict", verdict,
+		"reason", reason,
+	)
+
+	argsJSON, _ := json.Marshal(args)
 	entry := audit.Entry{
 		Method:  msg.Method,
 		Server:  p.cfg.ServerName,
 		Name:    name,
+		Args:    string(argsJSON),
 		Verdict: verdictStr(verdict),
+		Reason:  reason,
 	}
 	if err := p.cfg.AuditStore.Append(entry); err != nil {
 		slog.Error("audit write failed — denying call", "err", err)
 		p.sendError(ctx, msg, "audit unavailable — call denied")
 		return
+	}
+
+	if p.cfg.Notifier != nil {
+		p.cfg.Notifier.Broadcast("audit", entry)
 	}
 
 	switch verdict {
@@ -95,10 +155,8 @@ func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 			return
 		}
 		p.cfg.AgentTransport.Send(ctx, resp) //nolint:errcheck
-
 	case policy.VerdictDeny:
 		p.sendError(ctx, msg, "denied by policy")
-
 	default:
 		p.sendError(ctx, msg, "call denied")
 	}

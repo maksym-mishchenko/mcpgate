@@ -192,7 +192,7 @@ func TestNonGatedPassthrough(t *testing.T) {
 
 func TestAskCollapsedToDeny(t *testing.T) {
 	// "unknown_tool" is not in config; Default is AllowAsk → VerdictUnknown.
-	// In enforce mode this must collapse to DENY.
+	// In enforce mode this must collapse to DENY (via timeout since no resolver).
 	agentMsg := `{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"unknown_tool","arguments":{}}}` + "\n"
 
 	var agentOut bytes.Buffer
@@ -209,6 +209,7 @@ func TestAskCollapsedToDeny(t *testing.T) {
 		Coordinator:     coord,
 		AuditStore:      fa,
 		ServerName:      "fs",
+		ApprovalTimeout: 50 * time.Millisecond,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -222,4 +223,97 @@ func TestAskCollapsedToDeny(t *testing.T) {
 		t.Errorf("verdict = %q, want DENY (ask should collapse in enforce mode)", fa.entries[0].Verdict)
 	}
 	assertJSONRPCError(t, agentOut.Bytes(), -32001)
+}
+
+func TestAskParksAndResolvesAllow(t *testing.T) {
+	agentMsg := `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"pending_tool","arguments":{}}}` + "\n"
+	serverResp := `{"jsonrpc":"2.0","id":7,"result":{"ok":true}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(agentMsg), &agentOut)
+	serverIn := transport.NewStdio(strings.NewReader(serverResp), &bytes.Buffer{})
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+
+	cfg := &policy.Config{
+		Mode:    "enforce",
+		Default: policy.AllowAsk,
+		Servers: map[string]policy.ServerConfig{},
+	}
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    cfg,
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+		ApprovalTimeout: 2 * time.Second,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		p.Run(ctx)
+	}()
+
+	time.Sleep(30 * time.Millisecond)
+	coord.Resolve("fs:7", approval.VerdictAllow)
+
+	<-done
+
+	if len(fa.entries) == 0 {
+		t.Fatal("no audit entry")
+	}
+	if fa.entries[0].Verdict != "ALLOW" {
+		t.Errorf("verdict = %q, want ALLOW", fa.entries[0].Verdict)
+	}
+	if !bytes.Contains(agentOut.Bytes(), []byte("true")) {
+		t.Error("agent did not receive server response after approval")
+	}
+}
+
+func TestAskTimeoutDenies(t *testing.T) {
+	agentMsg := `{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"pending_tool","arguments":{}}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(agentMsg), &agentOut)
+	serverIn := transport.NewStdio(strings.NewReader(""), &bytes.Buffer{})
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+
+	cfg := &policy.Config{
+		Mode:    "enforce",
+		Default: policy.AllowAsk,
+		Servers: map[string]policy.ServerConfig{},
+	}
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    cfg,
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+		ApprovalTimeout: 100 * time.Millisecond,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	if len(fa.entries) == 0 {
+		t.Fatal("no audit entry")
+	}
+	if fa.entries[0].Verdict != "DENY" {
+		t.Errorf("verdict = %q, want DENY", fa.entries[0].Verdict)
+	}
+	if !bytes.Contains(agentOut.Bytes(), []byte("error")) {
+		t.Error("expected JSON-RPC error after timeout")
+	}
 }

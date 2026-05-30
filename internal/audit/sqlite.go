@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"runtime"
 	"strconv"
 	"strings"
@@ -224,6 +226,42 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 		prevHash = storedHash
 	}
 	return true, rows.Err()
+}
+
+// Export writes all audit entries as JSON Lines to w (oldest first).
+func (s *SQLiteStore) Export(w io.Writer) error {
+	rows, err := s.db.Query(
+		`SELECT seq,method,server,name,args,verdict,reason,ts_unix,hash,hmac_sig FROM audit_log ORDER BY seq`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	for rows.Next() {
+		var seq, ts int64
+		var method, server, name, args, verdict, reason, hash, hmacSig string
+		if err := rows.Scan(&seq, &method, &server, &name, &args, &verdict, &reason, &ts, &hash, &hmacSig); err != nil {
+			return err
+		}
+		obj := map[string]any{
+			"seq":      seq,
+			"method":   method,
+			"server":   server,
+			"name":     name,
+			"args":     args,
+			"verdict":  verdict,
+			"reason":   reason,
+			"ts":       time.Unix(ts, 0).UTC().Format(time.RFC3339),
+			"hash":     hash,
+			"hmac_sig": hmacSig,
+		}
+		if err := enc.Encode(obj); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }

@@ -1,9 +1,12 @@
 package audit_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/maksym-mishchenko/mcpgate/internal/audit"
@@ -294,4 +297,38 @@ func TestGapDetection(t *testing.T) {
 	if !hasGap {
 		t.Error("expected gap after deletion, got none")
 	}
+}
+
+func TestExport(t *testing.T) {
+dir := t.TempDir()
+store, err := audit.Open(filepath.Join(dir, "test.db"))
+if err != nil {
+t.Fatalf("open: %v", err)
+}
+defer store.Close()
+
+for i := 0; i < 2; i++ {
+store.Append(audit.Entry{Method: "tools/call", Server: "fs", Name: fmt.Sprintf("tool_%d", i), Verdict: "ALLOW"}) //nolint:errcheck
+}
+
+var buf bytes.Buffer
+if err := store.Export(&buf); err != nil {
+t.Fatalf("export: %v", err)
+}
+
+lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+// genesis + 2 entries = 3 lines
+if len(lines) != 3 {
+t.Errorf("exported %d lines, want 3", len(lines))
+}
+// Each line must be valid JSON with a "seq" field.
+for i, line := range lines {
+var obj map[string]any
+if err := json.Unmarshal([]byte(line), &obj); err != nil {
+t.Errorf("line %d not valid JSON: %v", i, err)
+}
+if _, ok := obj["seq"]; !ok {
+t.Errorf("line %d missing seq field", i)
+}
+}
 }

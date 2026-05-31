@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.0] - 2026-05-31 — "Gate the whole surface"
+
+### Added
+- **Reverse-channel gating** — server-initiated `sampling/createMessage` calls are now intercepted and policy-evaluated before reaching the agent's LLM; default-deny when no `sampling` rule is configured
+- **`prompts/get` gating** — agent→server prompt-template fetches are now gated (default-deny without a `prompts` rule), closing a prompt-injection vector
+- **Policy schema** — `SamplingRule` and `PromptsRule` blocks on `ServerConfig` (`Sampling *SamplingRule`, `Prompts *PromptsRule`), each with an `Allow` toggle
+- **`TestServerNotificationRelayedThenResponse`** — covers server notifications interleaved with responses
+
+### Fixed
+- **Server notification relay** — `recvServerResponse` now switches on frame kind: requests are policy-handled, notifications are relayed to the agent and the loop continues, only genuine responses are returned. Previously a server notification could be mistaken for the response and desync the proxy.
+
+### Security
+- Threat model (`SECURITY.md`) now documents both-direction interception and a gated-surfaces table (`tools/call`, `resources/read`, `prompts/get`, `sampling/createMessage`)
+
 ## [0.4.0] - 2026-05-30
 
 ### Added

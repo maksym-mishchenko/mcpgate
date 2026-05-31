@@ -10,10 +10,18 @@ const (
 )
 
 type Config struct {
-	Version int                     `yaml:"version"`
-	Mode    string                  `yaml:"mode"`    // "observe" | "enforce"
-	Default Allow                   `yaml:"default"` // default verdict for unmatched
-	Servers map[string]ServerConfig `yaml:"servers"`
+	Version    int                     `yaml:"version"`
+	Mode       string                  `yaml:"mode"`    // "observe" | "enforce"
+	Default    Allow                   `yaml:"default"` // default verdict for unmatched
+	Servers    map[string]ServerConfig `yaml:"servers"`
+	Heuristics *HeuristicsConfig       `yaml:"heuristics,omitempty"`
+}
+
+// HeuristicsConfig controls content-based injection/poisoning detection.
+// When the block is absent from YAML, the loader defaults Enabled to true.
+type HeuristicsConfig struct {
+	Enabled     bool `yaml:"enabled"`
+	BlockOnWarn bool `yaml:"block_on_warn"`
 }
 
 type ServerConfig struct {

@@ -2,6 +2,7 @@ package policy_test
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/maksym-mishchenko/mcpgate/internal/policy"
@@ -85,5 +86,36 @@ func TestServerConfigNeitherErrors(t *testing.T) {
 	cfg := policy.ServerConfig{}
 	if kind := cfg.TransportKind(); kind != "" {
 		t.Errorf("TransportKind = %q, want empty for unconfigured", kind)
+	}
+}
+
+func TestLoad_HeuristicsDefaultsEnabled(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "policy.yaml")
+	os.WriteFile(p, []byte("version: 1\nmode: observe\nservers:\n  s:\n    command: [\"echo\"]\n    resources:\n      allow: \"true\"\n"), 0o644)
+
+	cfg, err := policy.Load(p)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Heuristics == nil || !cfg.Heuristics.Enabled {
+		t.Fatalf("expected heuristics enabled by default, got %+v", cfg.Heuristics)
+	}
+	if cfg.Heuristics.BlockOnWarn {
+		t.Fatal("expected block_on_warn false by default")
+	}
+}
+
+func TestLoad_HeuristicsExplicitDisabled(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "policy.yaml")
+	os.WriteFile(p, []byte("version: 1\nmode: observe\nheuristics:\n  enabled: false\nservers:\n  s:\n    command: [\"echo\"]\n    resources:\n      allow: \"true\"\n"), 0o644)
+
+	cfg, err := policy.Load(p)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Heuristics == nil || cfg.Heuristics.Enabled {
+		t.Fatalf("expected heuristics explicitly disabled, got %+v", cfg.Heuristics)
 	}
 }

@@ -22,7 +22,10 @@ func Load(path string) (*Config, error) {
 	if cfg.Mode == "" {
 		cfg.Mode = "observe"
 	}
-	
+	if cfg.Heuristics == nil {
+		cfg.Heuristics = &HeuristicsConfig{Enabled: true}
+	}
+
 	// Validate each server has either Command or URL (but not both, not neither).
 	for name, srv := range cfg.Servers {
 		kind := srv.TransportKind()
@@ -33,7 +36,7 @@ func Load(path string) (*Config, error) {
 			return nil, fmt.Errorf("server %q: cannot have both 'command' and 'url'", name)
 		}
 	}
-	
+
 	return &cfg, nil
 }
 

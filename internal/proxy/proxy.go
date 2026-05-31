@@ -234,22 +234,33 @@ func (p *Proxy) recvServerResponse(ctx context.Context) (jsonrpc.Message, error)
 // server. Every decision is audited.
 func (p *Proxy) handleServerRequest(ctx context.Context, msg jsonrpc.Message) error {
 	verdict := policy.Evaluate(p.cfg.ServerName, msg.Method, "", nil, p.cfg.PolicyConfig)
+	reason := "policy"
+
+	var warnings []audit.Warning
+	if p.heuristicsEnabled() {
+		warnings = threatsToWarnings(scanner.Scan(string(msg.Params)))
+		if len(warnings) > 0 && p.blockOnWarn() && verdict == policy.VerdictAllow {
+			verdict = policy.VerdictDeny
+			reason = "heuristic:block_on_warn"
+		}
+	}
 
 	slog.Info("verdict",
 		"server", p.cfg.ServerName,
 		"method", msg.Method,
 		"direction", "server->agent",
 		"verdict", verdict,
-		"reason", "policy",
+		"reason", reason,
 	)
 
 	entry := audit.Entry{
-		Method:  msg.Method,
-		Server:  p.cfg.ServerName,
-		Name:    "",
-		Args:    "",
-		Verdict: verdictStr(verdict),
-		Reason:  "policy",
+		Method:   msg.Method,
+		Server:   p.cfg.ServerName,
+		Name:     "",
+		Args:     "",
+		Verdict:  verdictStr(verdict),
+		Reason:   reason,
+		Warnings: warnings,
 	}
 	if err := p.cfg.AuditStore.Append(entry); err != nil {
 		slog.Error("audit write failed — denying reverse call", "err", err)

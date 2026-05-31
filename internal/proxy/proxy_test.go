@@ -760,3 +760,138 @@ func TestOutboundWarning_Disabled_NoScan(t *testing.T) {
 		t.Errorf("agent output missing server response; got: %s", agentOut.Bytes())
 	}
 }
+
+func TestReverseChannelWarning_AllowRelaysWithWarning(t *testing.T) {
+	// Server sends sampling/createMessage whose params contain an injection
+	// payload; policy sampling.allow=true; block_on_warn=false.
+	// Expect: request relayed to agent; audit entry has >0 warnings; verdict ALLOW.
+	samplingReq := `{"jsonrpc":"2.0","id":99,"method":"sampling/createMessage","params":{"messages":[{"role":"user","content":"` + injectionPayload + `"}]}}` + "\n"
+	agentSamplingReply := `{"jsonrpc":"2.0","id":99,"result":{"content":"llm response"}}` + "\n"
+	toolCall := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{}}}` + "\n"
+	toolResp := `{"jsonrpc":"2.0","id":1,"result":{"content":"file content"}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(toolCall+agentSamplingReply), &agentOut)
+	var serverOut bytes.Buffer
+	serverIn := transport.NewStdio(strings.NewReader(samplingReq+toolResp), &serverOut)
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+	cfg := &policy.Config{
+		Mode:    "enforce",
+		Default: policy.AllowFalse,
+		Servers: map[string]policy.ServerConfig{
+			"fs": {
+				Command: []string{"echo"},
+				Tools: map[string]policy.TargetRule{
+					"read_file": {Allow: policy.AllowTrue},
+				},
+				Sampling: &policy.SamplingRule{Allow: true},
+			},
+		},
+		Heuristics: &policy.HeuristicsConfig{Enabled: true, BlockOnWarn: false},
+	}
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    cfg,
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	// sampling/createMessage must have been relayed to the agent.
+	if !bytes.Contains(agentOut.Bytes(), []byte("sampling/createMessage")) {
+		t.Errorf("sampling request did not reach agent; agent output: %s", agentOut.Bytes())
+	}
+
+	// Audit entry for sampling must be ALLOW with warnings.
+	var found bool
+	for _, e := range fa.entries {
+		if e.Method == "sampling/createMessage" {
+			found = true
+			if e.Verdict != "ALLOW" {
+				t.Errorf("sampling audit verdict = %q, want ALLOW", e.Verdict)
+			}
+			if len(e.Warnings) == 0 {
+				t.Error("expected at least one warning in audit entry, got none")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no audit entry for sampling/createMessage; entries: %+v", fa.entries)
+	}
+}
+
+func TestReverseChannelWarning_BlockOnWarn_Denies(t *testing.T) {
+	// Server sends sampling/createMessage whose params contain an injection
+	// payload; policy sampling.allow=true; block_on_warn=true.
+	// Expect: server receives -32001; request NOT relayed to agent; audit verdict DENY.
+	samplingReq := `{"jsonrpc":"2.0","id":99,"method":"sampling/createMessage","params":{"messages":[{"role":"user","content":"` + injectionPayload + `"}]}}` + "\n"
+	toolCall := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{}}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(toolCall), &agentOut)
+	var serverOut bytes.Buffer
+	serverIn := transport.NewStdio(strings.NewReader(samplingReq), &serverOut)
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+	cfg := &policy.Config{
+		Mode:    "enforce",
+		Default: policy.AllowFalse,
+		Servers: map[string]policy.ServerConfig{
+			"fs": {
+				Command: []string{"echo"},
+				Tools: map[string]policy.TargetRule{
+					"read_file": {Allow: policy.AllowTrue},
+				},
+				Sampling: &policy.SamplingRule{Allow: true},
+			},
+		},
+		Heuristics: &policy.HeuristicsConfig{Enabled: true, BlockOnWarn: true},
+	}
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    cfg,
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	// Server must have received a JSON-RPC error.
+	assertJSONRPCError(t, lastJSONLine(serverOut.Bytes()), -32001)
+
+	// sampling/createMessage must NOT have reached the agent.
+	if bytes.Contains(agentOut.Bytes(), []byte("sampling/createMessage")) {
+		t.Error("sampling request must not reach agent when blocked by heuristics")
+	}
+
+	// Audit entry for sampling must be DENY with warnings.
+	var found bool
+	for _, e := range fa.entries {
+		if e.Method == "sampling/createMessage" {
+			found = true
+			if e.Verdict != "DENY" {
+				t.Errorf("sampling audit verdict = %q, want DENY", e.Verdict)
+			}
+			if len(e.Warnings) == 0 {
+				t.Error("expected at least one warning in audit entry, got none")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no audit entry for sampling/createMessage; entries: %+v", fa.entries)
+	}
+}

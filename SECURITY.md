@@ -25,6 +25,20 @@ All other methods (initialization, capability negotiation, notifications, etc.) 
 
 ## Controls
 
+### Heuristic detection (v1.1)
+
+mcpgate scans tool arguments, prompt fetches, resource results, and reverse-channel
+sampling content against a built-in, versioned signature set (`scanner.SignatureSetVersion`)
+for known prompt-injection and tool-poisoning patterns.
+
+- Matches are recorded as **WARN** annotations on the audit entry — they do **not** block by
+  default (false positives degrade to noise, not outages).
+- Set `heuristics.block_on_warn: true` to escalate: an otherwise-`ALLOW` call is denied, and
+  poisoned inbound content is withheld from the agent. `DENY`/`ASK` are never downgraded.
+- Warnings are part of the signed audit row, so they are tamper-evident like every other field.
+- Detection is deterministic pattern matching only; it is a defence-in-depth signal, not a
+  guarantee.
+
 ### Token authentication
 
 Every web API endpoint (`/health`, `/approve`, `/events`) requires a `Bearer` token. The token is set via `--token` flag or the `MCPGATE_TOKEN` environment variable.

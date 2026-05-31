@@ -71,6 +71,11 @@ servers:
         allow: "false"
     resources:
       allow: "true"
+
+# Injection / tool-poisoning heuristics (v1.1).
+heuristics:
+  enabled: true          # WARN-only detection (default)
+  block_on_warn: false   # set true to deny on a match and withhold poisoned content
 ```
 
 ### Run

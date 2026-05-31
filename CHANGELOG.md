@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.0] - 2026-05-31 — "See the poison"
+
+### Added
+- **Injection / tool-poisoning heuristics** (`internal/scanner`) — deterministic, versioned signature set (ignore-previous-instructions, jailbreak fragments, base64/data-URI/credential exfil) scanned over MCP traffic in both directions
+- **`heuristics` config block** — `enabled` (default true, WARN-only) and `block_on_warn` (opt-in escalation of ALLOW→DENY)
+- **Signed warnings** — heuristic matches are stored in the audit chain and HMAC-signed, so they are tamper-evident; surfaced as a ⚠ badge in the dashboard
+- **Inbound content withholding** — with `block_on_warn`, poisoned `resources/read` results and `sampling/createMessage` content are withheld from the agent
+
+### Security
+- `SECURITY.md` documents the heuristic control, its WARN semantics, and the opt-in blocking model
+
 ## [1.0.0] - 2026-05-31 — "Gate the whole surface"
 
 ### Added

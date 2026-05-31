@@ -57,7 +57,6 @@ func OpenWithHMAC(path string, key []byte) (*SQLiteStore, error) {
 	return s, nil
 }
 
-
 func migrate(db *sql.DB) error {
 	// v0.1: initial schema
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS audit_log (
@@ -77,6 +76,11 @@ func migrate(db *sql.DB) error {
 	}
 	// v0.3: HMAC signature per row (empty string = no HMAC)
 	_, err := db.Exec(`ALTER TABLE audit_log ADD COLUMN hmac_sig TEXT NOT NULL DEFAULT ""`)
+	if err != nil && !isSQLiteAlreadyExists(err) {
+		return err
+	}
+	// v1.1: per-row heuristic warnings as JSON (empty string = none)
+	_, err = db.Exec(`ALTER TABLE audit_log ADD COLUMN warnings TEXT NOT NULL DEFAULT ""`)
 	if err != nil && !isSQLiteAlreadyExists(err) {
 		return err
 	}
@@ -141,6 +145,12 @@ func (s *SQLiteStore) Append(e Entry) error {
 		e.Ts = time.Now().UTC()
 	}
 
+	warningsJSON := ""
+	if len(e.Warnings) > 0 {
+		b, _ := json.Marshal(e.Warnings)
+		warningsJSON = string(b)
+	}
+
 	fields := map[string]any{
 		"method":  e.Method,
 		"server":  e.Server,
@@ -150,6 +160,9 @@ func (s *SQLiteStore) Append(e Entry) error {
 		"reason":  e.Reason,
 		"seq":     seq,
 		"ts":      e.Ts.Unix(),
+	}
+	if warningsJSON != "" {
+		fields["warnings"] = warningsJSON
 	}
 	entryBytes := canonicalJSON(fields)
 	combined := append([]byte(prevHash), entryBytes...)
@@ -165,9 +178,9 @@ func (s *SQLiteStore) Append(e Entry) error {
 	}
 
 	_, err = s.db.Exec(
-		`INSERT INTO audit_log(seq,method,server,name,args,verdict,reason,ts_unix,hash,status,hmac_sig)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-		seq, e.Method, e.Server, e.Name, e.Args, e.Verdict, e.Reason, e.Ts.Unix(), hashHex, "DONE", hmacSig,
+		`INSERT INTO audit_log(seq,method,server,name,args,verdict,reason,ts_unix,hash,status,hmac_sig,warnings)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+		seq, e.Method, e.Server, e.Name, e.Args, e.Verdict, e.Reason, e.Ts.Unix(), hashHex, "DONE", hmacSig, warningsJSON,
 	)
 	return err
 }
@@ -187,7 +200,7 @@ func (s *SQLiteStore) lastHashAndSeq() (string, int64, error) {
 // VerifyChain recomputes every hash and returns false if any mismatch is found.
 func (s *SQLiteStore) VerifyChain() (bool, error) {
 	rows, err := s.db.Query(
-		`SELECT seq,method,server,name,args,verdict,reason,ts_unix,hash,hmac_sig FROM audit_log ORDER BY seq`)
+		`SELECT seq,method,server,name,args,verdict,reason,ts_unix,hash,hmac_sig,warnings FROM audit_log ORDER BY seq`)
 	if err != nil {
 		return false, err
 	}
@@ -196,15 +209,18 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 	prevHash := ""
 	for rows.Next() {
 		var seq, ts int64
-		var method, server, name, args, verdict, reason, storedHash, storedHMACsig string
+		var method, server, name, args, verdict, reason, storedHash, storedHMACsig, warnings string
 		if err := rows.Scan(&seq, &method, &server, &name, &args,
-			&verdict, &reason, &ts, &storedHash, &storedHMACsig); err != nil {
+			&verdict, &reason, &ts, &storedHash, &storedHMACsig, &warnings); err != nil {
 			return false, err
 		}
 		fields := map[string]any{
 			"method": method, "server": server, "name": name,
 			"args": args, "verdict": verdict, "reason": reason,
 			"seq": seq, "ts": ts,
+		}
+		if warnings != "" {
+			fields["warnings"] = warnings
 		}
 		entryBytes := canonicalJSON(fields)
 		combined := append([]byte(prevHash), entryBytes...)
@@ -231,7 +247,7 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 // Export writes all audit entries as JSON Lines to w (oldest first).
 func (s *SQLiteStore) Export(w io.Writer) error {
 	rows, err := s.db.Query(
-		`SELECT seq,method,server,name,args,verdict,reason,ts_unix,hash,hmac_sig FROM audit_log ORDER BY seq`)
+		`SELECT seq,method,server,name,args,verdict,reason,ts_unix,hash,hmac_sig,warnings FROM audit_log ORDER BY seq`)
 	if err != nil {
 		return err
 	}
@@ -241,8 +257,8 @@ func (s *SQLiteStore) Export(w io.Writer) error {
 	enc.SetEscapeHTML(false)
 	for rows.Next() {
 		var seq, ts int64
-		var method, server, name, args, verdict, reason, hash, hmacSig string
-		if err := rows.Scan(&seq, &method, &server, &name, &args, &verdict, &reason, &ts, &hash, &hmacSig); err != nil {
+		var method, server, name, args, verdict, reason, hash, hmacSig, warnings string
+		if err := rows.Scan(&seq, &method, &server, &name, &args, &verdict, &reason, &ts, &hash, &hmacSig, &warnings); err != nil {
 			return err
 		}
 		obj := map[string]any{
@@ -256,6 +272,9 @@ func (s *SQLiteStore) Export(w io.Writer) error {
 			"ts":       time.Unix(ts, 0).UTC().Format(time.RFC3339),
 			"hash":     hash,
 			"hmac_sig": hmacSig,
+		}
+		if warnings != "" {
+			obj["warnings"] = warnings
 		}
 		if err := enc.Encode(obj); err != nil {
 			return err
@@ -272,7 +291,7 @@ func (s *SQLiteStore) GetDB() *sql.DB { return s.db }
 // Recent returns the n most recent audit entries, newest first.
 func (s *SQLiteStore) Recent(n int) ([]Entry, error) {
 	rows, err := s.db.Query(
-		`SELECT id, seq, method, server, name, args, verdict, reason, ts_unix FROM audit_log
+		`SELECT id, seq, method, server, name, args, verdict, reason, ts_unix, warnings FROM audit_log
 		 ORDER BY seq DESC LIMIT ?`, n)
 	if err != nil {
 		return nil, err
@@ -283,11 +302,15 @@ func (s *SQLiteStore) Recent(n int) ([]Entry, error) {
 	for rows.Next() {
 		var e Entry
 		var ts int64
+		var warnings string
 		if err := rows.Scan(&e.ID, &e.Seq, &e.Method, &e.Server, &e.Name,
-			&e.Args, &e.Verdict, &e.Reason, &ts); err != nil {
+			&e.Args, &e.Verdict, &e.Reason, &ts, &warnings); err != nil {
 			return nil, err
 		}
 		e.Ts = time.Unix(ts, 0).UTC()
+		if warnings != "" {
+			json.Unmarshal([]byte(warnings), &e.Warnings) //nolint:errcheck
+		}
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()

@@ -300,35 +300,72 @@ func TestGapDetection(t *testing.T) {
 }
 
 func TestExport(t *testing.T) {
-dir := t.TempDir()
-store, err := audit.Open(filepath.Join(dir, "test.db"))
-if err != nil {
-t.Fatalf("open: %v", err)
-}
-defer store.Close()
+	dir := t.TempDir()
+	store, err := audit.Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer store.Close()
 
-for i := 0; i < 2; i++ {
-store.Append(audit.Entry{Method: "tools/call", Server: "fs", Name: fmt.Sprintf("tool_%d", i), Verdict: "ALLOW"}) //nolint:errcheck
+	for i := 0; i < 2; i++ {
+		store.Append(audit.Entry{Method: "tools/call", Server: "fs", Name: fmt.Sprintf("tool_%d", i), Verdict: "ALLOW"}) //nolint:errcheck
+	}
+
+	var buf bytes.Buffer
+	if err := store.Export(&buf); err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	// genesis + 2 entries = 3 lines
+	if len(lines) != 3 {
+		t.Errorf("exported %d lines, want 3", len(lines))
+	}
+	// Each line must be valid JSON with a "seq" field.
+	for i, line := range lines {
+		var obj map[string]any
+		if err := json.Unmarshal([]byte(line), &obj); err != nil {
+			t.Errorf("line %d not valid JSON: %v", i, err)
+		}
+		if _, ok := obj["seq"]; !ok {
+			t.Errorf("line %d missing seq field", i)
+		}
+	}
 }
 
-var buf bytes.Buffer
-if err := store.Export(&buf); err != nil {
-t.Fatalf("export: %v", err)
-}
+func TestAppend_WithWarnings_VerifiesAndRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "audit.db")
+	s, err := audit.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer s.Close()
 
-lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-// genesis + 2 entries = 3 lines
-if len(lines) != 3 {
-t.Errorf("exported %d lines, want 3", len(lines))
-}
-// Each line must be valid JSON with a "seq" field.
-for i, line := range lines {
-var obj map[string]any
-if err := json.Unmarshal([]byte(line), &obj); err != nil {
-t.Errorf("line %d not valid JSON: %v", i, err)
-}
-if _, ok := obj["seq"]; !ok {
-t.Errorf("line %d missing seq field", i)
-}
-}
+	e := audit.Entry{
+		Method:  "resources/read",
+		Server:  "s",
+		Verdict: "ALLOW",
+		Reason:  "policy",
+		Warnings: []audit.Warning{
+			{ID: "injection.ignore-previous", Severity: "high", Snippet: "ignore all previous instructions"},
+		},
+	}
+	if err := s.Append(e); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	ok, err := s.VerifyChain()
+	if err != nil || !ok {
+		t.Fatalf("verify chain ok=%v err=%v", ok, err)
+	}
+
+	recent, err := s.Recent(1)
+	if err != nil {
+		t.Fatalf("recent: %v", err)
+	}
+	if len(recent) != 1 || len(recent[0].Warnings) != 1 ||
+		recent[0].Warnings[0].ID != "injection.ignore-previous" {
+		t.Fatalf("warnings did not round-trip: %+v", recent)
+	}
 }

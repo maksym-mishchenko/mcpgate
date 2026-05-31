@@ -65,6 +65,7 @@
   .verdict-allow { color: var(--green); }
   .verdict-deny  { color: var(--red); }
   .verdict-ask   { color: var(--yellow); }
+  .warn-badge { color: var(--yellow); font-weight: 600; margin-right: 6px; cursor: help; }
 </style>
 </head>
 <body>
@@ -146,7 +147,13 @@ function prependAuditRow(e) {
   const vClass = verdict === 'ALLOW' ? 'allow' : verdict === 'DENY' ? 'deny' : 'ask';
   const tr = document.createElement('tr');
   tr.className = vClass;
-  tr.innerHTML = `<td>${esc(ts)}</td><td>${esc(e.Server||e.server||'')}</td><td>${esc(e.Method||e.method||'')}</td><td>${esc(e.Name||e.name||'')}</td><td class="verdict-${vClass}">${esc(verdict)}</td><td>${esc(e.Reason||e.reason||'')}</td>`;
+  const warnings = e.Warnings || e.warnings || [];
+  let warnBadge = '';
+  if (warnings.length) {
+    const ids = warnings.map(w => w.id || w.ID || '').filter(Boolean).join(', ');
+    warnBadge = `<span class="warn-badge" title="${esc(ids)}">⚠ ${warnings.length}</span>`;
+  }
+  tr.innerHTML = `<td>${esc(ts)}</td><td>${esc(e.Server||e.server||'')}</td><td>${esc(e.Method||e.method||'')}</td><td>${esc(e.Name||e.name||'')}</td><td class="verdict-${vClass}">${warnBadge}${esc(verdict)}</td><td>${esc(e.Reason||e.reason||'')}</td>`;
   tbody.insertBefore(tr, tbody.firstChild);
   while (tbody.rows.length > MAX_ROWS) tbody.deleteRow(tbody.rows.length - 1);
 }

@@ -176,7 +176,7 @@ func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 			return
 		}
 		if p.heuristicsEnabled() {
-			if w := threatsToWarnings(scanner.Scan(string(resp.Result))); len(w) > 0 {
+			if w := threatsToWarnings(scanner.Scan(string(resp.Result) + string(resp.Error))); len(w) > 0 {
 				inVerdict := policy.VerdictAllow
 				inReason := "heuristic:inbound"
 				if p.blockOnWarn() {

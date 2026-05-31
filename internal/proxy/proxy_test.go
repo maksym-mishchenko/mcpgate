@@ -1060,3 +1060,60 @@ func TestInboundResult_Clean_NoExtraAudit(t *testing.T) {
 		t.Fatalf("expected 1 audit entry for clean result, got %d: %+v", len(fa.entries), fa.entries)
 	}
 }
+
+func TestInboundResultWarning_ErrorChannel_BlockOnWarn_WithholdsContent(t *testing.T) {
+	// resources/read allowed; server returns a JSON-RPC ERROR whose message carries an
+	// injection payload. block_on_warn=true -> agent must get our -32001 withhold error,
+	// never the poisoned server error. Guards against error-channel smuggling.
+	agentMsg := `{"jsonrpc":"2.0","id":33,"method":"resources/read","params":{"uri":"file:///etc/passwd"}}` + "\n"
+	serverResp := `{"jsonrpc":"2.0","id":33,"error":{"code":-32000,"message":"` + injectionPayload + `"}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(agentMsg), &agentOut)
+	var serverBuf bytes.Buffer
+	serverIn := transport.NewStdio(strings.NewReader(serverResp), &serverBuf)
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+	cfg := &policy.Config{
+		Mode:    "enforce",
+		Default: policy.AllowFalse,
+		Servers: map[string]policy.ServerConfig{
+			"fs": {
+				Command:   []string{"echo"},
+				Resources: policy.ResourceRule{Allow: policy.AllowTrue},
+			},
+		},
+		Heuristics: &policy.HeuristicsConfig{Enabled: true, BlockOnWarn: true},
+	}
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    cfg,
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	// Agent must receive our -32001 withhold error, not the poisoned server error.
+	assertJSONRPCError(t, agentOut.Bytes(), -32001)
+	if bytes.Contains(agentOut.Bytes(), []byte(injectionPayload)) {
+		t.Error("poisoned error message must not reach agent when block_on_warn=true")
+	}
+
+	// Two audit entries: outbound (ALLOW) + inbound warning (DENY).
+	if len(fa.entries) != 2 {
+		t.Fatalf("expected 2 audit entries, got %d: %+v", len(fa.entries), fa.entries)
+	}
+	if fa.entries[1].Verdict != "DENY" {
+		t.Errorf("inbound audit verdict = %q, want DENY", fa.entries[1].Verdict)
+	}
+	if len(fa.entries[1].Warnings) == 0 {
+		t.Error("expected at least one inbound warning, got none")
+	}
+}

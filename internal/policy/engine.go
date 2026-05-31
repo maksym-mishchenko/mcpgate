@@ -9,7 +9,7 @@ import (
 type Verdict int
 
 const (
-	VerdictAllow   Verdict = iota
+	VerdictAllow Verdict = iota
 	VerdictDeny
 	VerdictAsk
 	VerdictUnknown // unmatched → human prompt or deny (headless)

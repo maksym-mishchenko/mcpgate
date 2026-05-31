@@ -42,7 +42,7 @@ func main() {
 
 		case "export":
 			fs := flag.NewFlagSet("export", flag.ExitOnError)
-			dbFlag  := fs.String("db",  "mcpgate.db",      "path to audit database")
+			dbFlag := fs.String("db", "mcpgate.db", "path to audit database")
 			outFlag := fs.String("out", "audit.jsonl", "output file ('-' for stdout)")
 			fs.Parse(os.Args[2:]) //nolint:errcheck
 			if err := runExport(*dbFlag, *outFlag); err != nil {
@@ -53,8 +53,8 @@ func main() {
 
 		case "verify":
 			fs := flag.NewFlagSet("verify", flag.ExitOnError)
-			fileFlag := fs.String("file", "-",  "JSON Lines file to verify ('-' for stdin)")
-			keyFlag  := fs.String("key",  "",   "optional HMAC key file (32 bytes)")
+			fileFlag := fs.String("file", "-", "JSON Lines file to verify ('-' for stdin)")
+			keyFlag := fs.String("key", "", "optional HMAC key file (32 bytes)")
 			fs.Parse(os.Args[2:]) //nolint:errcheck
 			if err := runVerify(*fileFlag, *keyFlag); err != nil {
 				fmt.Fprintf(os.Stderr, "verify: %v\n", err)
@@ -64,9 +64,9 @@ func main() {
 		}
 	}
 
-	configPath      := flag.String("config", "mcpgate.yaml", "path to policy config")
-	token           := flag.String("token", os.Getenv("MCPGATE_TOKEN"), "bearer token for web UI")
-	addr            := flag.String("addr", "127.0.0.1:18789", "web server listen address")
+	configPath := flag.String("config", "mcpgate.yaml", "path to policy config")
+	token := flag.String("token", os.Getenv("MCPGATE_TOKEN"), "bearer token for web UI")
+	addr := flag.String("addr", "127.0.0.1:18789", "web server listen address")
 	approvalTimeout := flag.Duration("approval-timeout", 30*time.Second, "how long to wait for human approval before auto-deny")
 	flag.Parse()
 

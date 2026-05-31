@@ -175,6 +175,37 @@ func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 		if err != nil {
 			return
 		}
+		if p.heuristicsEnabled() {
+			if w := threatsToWarnings(scanner.Scan(string(resp.Result))); len(w) > 0 {
+				inVerdict := policy.VerdictAllow
+				inReason := "heuristic:inbound"
+				if p.blockOnWarn() {
+					inVerdict = policy.VerdictDeny
+					inReason = "heuristic:inbound:block_on_warn"
+				}
+				inEntry := audit.Entry{
+					Method:   msg.Method,
+					Server:   p.cfg.ServerName,
+					Name:     name,
+					Args:     "",
+					Verdict:  verdictStr(inVerdict),
+					Reason:   inReason,
+					Warnings: w,
+				}
+				if err := p.cfg.AuditStore.Append(inEntry); err != nil {
+					slog.Error("inbound audit write failed — withholding result", "err", err)
+					p.sendError(ctx, msg, "audit unavailable — result withheld")
+					return
+				}
+				if p.cfg.Notifier != nil {
+					p.cfg.Notifier.Broadcast("audit", inEntry)
+				}
+				if inVerdict == policy.VerdictDeny {
+					p.sendError(ctx, msg, "result withheld: heuristic match")
+					return
+				}
+			}
+		}
 		p.cfg.AgentTransport.Send(ctx, resp) //nolint:errcheck
 	case policy.VerdictDeny:
 		p.sendError(ctx, msg, "denied by policy")

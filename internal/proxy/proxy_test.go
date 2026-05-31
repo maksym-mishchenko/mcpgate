@@ -895,3 +895,168 @@ func TestReverseChannelWarning_BlockOnWarn_Denies(t *testing.T) {
 		t.Errorf("no audit entry for sampling/createMessage; entries: %+v", fa.entries)
 	}
 }
+
+func TestInboundResultWarning_RelaysAndAuditsWarning(t *testing.T) {
+	// resources/read allowed; server result contains injection payload.
+	// block_on_warn=false -> result relayed to agent; second audit entry with inbound warning.
+	agentMsg := "{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"resources/read\",\"params\":{\"uri\":\"file:///etc/passwd\"}}\n"
+	serverResp := "{\"jsonrpc\":\"2.0\",\"id\":30,\"result\":{\"contents\":[{\"text\":\"" + injectionPayload + "\"}]}}\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(agentMsg), &agentOut)
+	var serverBuf bytes.Buffer
+	serverIn := transport.NewStdio(strings.NewReader(serverResp), &serverBuf)
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+	cfg := &policy.Config{
+		Mode:    "enforce",
+		Default: policy.AllowFalse,
+		Servers: map[string]policy.ServerConfig{
+			"fs": {
+				Command:   []string{"echo"},
+				Resources: policy.ResourceRule{Allow: policy.AllowTrue},
+			},
+		},
+		Heuristics: &policy.HeuristicsConfig{Enabled: true, BlockOnWarn: false},
+	}
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    cfg,
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	// Result must have been relayed to agent.
+	if !bytes.Contains(agentOut.Bytes(), []byte(injectionPayload)) {
+		t.Errorf("agent output missing relayed result; got: %s", agentOut.Bytes())
+	}
+
+	// Two audit entries: outbound (ALLOW) + inbound warning (ALLOW).
+	if len(fa.entries) != 2 {
+		t.Fatalf("expected 2 audit entries, got %d: %+v", len(fa.entries), fa.entries)
+	}
+	inEntry := fa.entries[1]
+	if inEntry.Verdict != "ALLOW" {
+		t.Errorf("inbound audit verdict = %q, want ALLOW", inEntry.Verdict)
+	}
+	if inEntry.Reason != "heuristic:inbound" {
+		t.Errorf("inbound audit reason = %q, want heuristic:inbound", inEntry.Reason)
+	}
+	if len(inEntry.Warnings) == 0 {
+		t.Error("expected at least one inbound warning, got none")
+	}
+}
+
+func TestInboundResultWarning_BlockOnWarn_WithholdsContent(t *testing.T) {
+	// resources/read allowed; server result contains injection payload.
+	// block_on_warn=true -> agent receives -32001 error; inbound audit entry verdict DENY.
+	agentMsg := "{\"jsonrpc\":\"2.0\",\"id\":31,\"method\":\"resources/read\",\"params\":{\"uri\":\"file:///etc/passwd\"}}\n"
+	serverResp := "{\"jsonrpc\":\"2.0\",\"id\":31,\"result\":{\"contents\":[{\"text\":\"" + injectionPayload + "\"}]}}\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(agentMsg), &agentOut)
+	var serverBuf bytes.Buffer
+	serverIn := transport.NewStdio(strings.NewReader(serverResp), &serverBuf)
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+	cfg := &policy.Config{
+		Mode:    "enforce",
+		Default: policy.AllowFalse,
+		Servers: map[string]policy.ServerConfig{
+			"fs": {
+				Command:   []string{"echo"},
+				Resources: policy.ResourceRule{Allow: policy.AllowTrue},
+			},
+		},
+		Heuristics: &policy.HeuristicsConfig{Enabled: true, BlockOnWarn: true},
+	}
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    cfg,
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	// Agent must receive -32001 error, not the poisoned result.
+	assertJSONRPCError(t, agentOut.Bytes(), -32001)
+	if bytes.Contains(agentOut.Bytes(), []byte(injectionPayload)) {
+		t.Error("poisoned result must not reach agent when block_on_warn=true")
+	}
+
+	// Two audit entries: outbound (ALLOW) + inbound warning (DENY).
+	if len(fa.entries) != 2 {
+		t.Fatalf("expected 2 audit entries, got %d: %+v", len(fa.entries), fa.entries)
+	}
+	inEntry := fa.entries[1]
+	if inEntry.Verdict != "DENY" {
+		t.Errorf("inbound audit verdict = %q, want DENY", inEntry.Verdict)
+	}
+	if len(inEntry.Warnings) == 0 {
+		t.Error("expected at least one inbound warning, got none")
+	}
+}
+
+func TestInboundResult_Clean_NoExtraAudit(t *testing.T) {
+	// resources/read allowed; server returns clean result.
+	// Expect: result relayed; only 1 audit entry (no inbound warning entry).
+	agentMsg := "{\"jsonrpc\":\"2.0\",\"id\":32,\"method\":\"resources/read\",\"params\":{\"uri\":\"file:///etc/passwd\"}}\n"
+	serverResp := "{\"jsonrpc\":\"2.0\",\"id\":32,\"result\":{\"contents\":[{\"text\":\"clean file content\"}]}}\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(agentMsg), &agentOut)
+	var serverBuf bytes.Buffer
+	serverIn := transport.NewStdio(strings.NewReader(serverResp), &serverBuf)
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+	cfg := &policy.Config{
+		Mode:    "enforce",
+		Default: policy.AllowFalse,
+		Servers: map[string]policy.ServerConfig{
+			"fs": {
+				Command:   []string{"echo"},
+				Resources: policy.ResourceRule{Allow: policy.AllowTrue},
+			},
+		},
+		Heuristics: &policy.HeuristicsConfig{Enabled: true, BlockOnWarn: true},
+	}
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    cfg,
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	// Result must have been relayed to agent.
+	if !bytes.Contains(agentOut.Bytes(), []byte("clean file content")) {
+		t.Errorf("agent output missing relayed result; got: %s", agentOut.Bytes())
+	}
+
+	// Only one audit entry (outbound) -- no inbound warning entry for clean results.
+	if len(fa.entries) != 1 {
+		t.Fatalf("expected 1 audit entry for clean result, got %d: %+v", len(fa.entries), fa.entries)
+	}
+}

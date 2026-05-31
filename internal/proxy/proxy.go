@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/maksym-mishchenko/mcpgate/internal/approval"
@@ -13,6 +14,7 @@ import (
 	"github.com/maksym-mishchenko/mcpgate/internal/event"
 	"github.com/maksym-mishchenko/mcpgate/internal/jsonrpc"
 	"github.com/maksym-mishchenko/mcpgate/internal/policy"
+	"github.com/maksym-mishchenko/mcpgate/internal/scanner"
 	"github.com/maksym-mishchenko/mcpgate/internal/transport"
 )
 
@@ -118,22 +120,41 @@ func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 		}
 	}
 
+	var warnings []audit.Warning
+	if p.heuristicsEnabled() {
+		var sb strings.Builder
+		sb.WriteString(name)
+		for k, v := range args {
+			sb.WriteByte(' ')
+			sb.WriteString(k)
+			sb.WriteByte('=')
+			sb.WriteString(v)
+		}
+		warnings = threatsToWarnings(scanner.Scan(sb.String()))
+		if len(warnings) > 0 && p.blockOnWarn() && verdict == policy.VerdictAllow {
+			verdict = policy.VerdictDeny
+			reason = "heuristic:block_on_warn"
+		}
+	}
+
 	slog.Info("verdict",
 		"server", p.cfg.ServerName,
 		"method", msg.Method,
 		"name", name,
 		"verdict", verdict,
 		"reason", reason,
+		"warnings", len(warnings),
 	)
 
 	argsJSON, _ := json.Marshal(args)
 	entry := audit.Entry{
-		Method:  msg.Method,
-		Server:  p.cfg.ServerName,
-		Name:    name,
-		Args:    string(argsJSON),
-		Verdict: verdictStr(verdict),
-		Reason:  reason,
+		Method:   msg.Method,
+		Server:   p.cfg.ServerName,
+		Name:     name,
+		Args:     string(argsJSON),
+		Verdict:  verdictStr(verdict),
+		Reason:   reason,
+		Warnings: warnings,
 	}
 	if err := p.cfg.AuditStore.Append(entry); err != nil {
 		slog.Error("audit write failed — denying call", "err", err)
@@ -290,3 +311,24 @@ func extractArgs(msg jsonrpc.Message) map[string]string {
 }
 
 func verdictStr(v policy.Verdict) string { return v.String() }
+
+func threatsToWarnings(ts []scanner.Threat) []audit.Warning {
+	if len(ts) == 0 {
+		return nil
+	}
+	out := make([]audit.Warning, len(ts))
+	for i, t := range ts {
+		out[i] = audit.Warning{ID: t.ID, Severity: t.Severity, Snippet: t.Snippet}
+	}
+	return out
+}
+
+func (p *Proxy) heuristicsEnabled() bool {
+	h := p.cfg.PolicyConfig.Heuristics
+	return h != nil && h.Enabled
+}
+
+func (p *Proxy) blockOnWarn() bool {
+	h := p.cfg.PolicyConfig.Heuristics
+	return h != nil && h.BlockOnWarn
+}

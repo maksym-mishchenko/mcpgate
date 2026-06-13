@@ -4,6 +4,24 @@
 
 mcpgate sits between an AI agent and an MCP server. Every gated `tools/call`, `resources/read`, `prompts/get`, and reverse-channel `sampling/createMessage` is evaluated against a YAML policy before it reaches the other side. Unknown or denied calls are blocked and logged; nothing passes through without an explicit allow decision.
 
+## Showcase demo
+
+The fastest way to understand mcpgate is the showcase flow in [`docs/SHOWCASE.md`](docs/SHOWCASE.md):
+
+1. An agent tries to read a safe file and mcpgate allows it.
+2. The same agent tries to write a file and mcpgate parks the call for human approval.
+3. A dangerous delete is denied by policy before it reaches the MCP server.
+4. Prompt-injection or exfiltration text is flagged in the signed audit trail and can be blocked with `heuristics.block_on_warn`.
+
+## Highlights
+
+- Deny-by-default YAML policy for MCP tools, resources, prompts, and reverse-channel sampling.
+- Write-ahead SQLite audit: calls are logged before forwarding, and audit failure denies the call.
+- Local browser dashboard for pending approvals and live audit events.
+- HMAC-verifiable audit chain export for incident review.
+- Deterministic prompt-injection/tool-poisoning scanner with optional block-on-warn mode.
+- Stdio and HTTP server transports with optional HTTP egress allowlisting.
+
 ---
 
 ## How it works
@@ -84,8 +102,8 @@ heuristics:
 # Set a high-entropy token for the web API (required)
 export MCPGATE_TOKEN="$(openssl rand -hex 32)"
 
-# Run — mcpgate wraps the MCP server command
-mcpgate --config mcpgate.yaml -- /usr/local/bin/mcp-filesystem --root /home/user/safe
+# Run — with a single configured server, mcpgate starts its command from the policy
+mcpgate --config mcpgate.yaml
 ```
 
 Configure your AI client to use mcpgate's stdio instead of the MCP server directly. For example in Claude Desktop's `mcp.json`:
@@ -95,7 +113,7 @@ Configure your AI client to use mcpgate's stdio instead of the MCP server direct
   "mcpServers": {
     "filesystem": {
       "command": "mcpgate",
-      "args": ["--config", "/path/to/mcpgate.yaml", "--", "/usr/local/bin/mcp-filesystem", "--root", "/home/user/safe"],
+      "args": ["--config", "/path/to/mcpgate.yaml"],
       "env": { "MCPGATE_TOKEN": "<generate-a-random-token>" }
     }
   }
@@ -112,7 +130,7 @@ mode: enforce        # "enforce" (block violations) | "observe" (log only, allow
 default: "false"     # default verdict for unmatched calls: "true" | "false" | "ask"
 
 servers:
-  <server-name>:     # must match the executable name passed as the first arg after --
+  <server-name>:     # choose this name with --server when multiple servers are configured
     command: []      # stdio server command; omit when using url
     url: ""          # HTTP JSON-RPC endpoint; omit when using command
     egress_allow: [] # optional hostname allowlist for HTTP transport
@@ -157,7 +175,7 @@ heuristics:
 ## CLI reference
 
 ```
-mcpgate [flags] -- <server-command> [server-args...]
+mcpgate [flags] [-- <server-command> [server-args...]]
 ```
 
 | Flag | Default | Description |
@@ -166,8 +184,9 @@ mcpgate [flags] -- <server-command> [server-args...]
 | `--token` | `$MCPGATE_TOKEN` | Bearer token for web API authentication |
 | `--addr` | `127.0.0.1:18789` | Web server listen address |
 | `--approval-timeout` | `30s` | How long an `ask` call waits before auto-deny |
+| `--server` | `""` | Server name from policy config to run; required when config has multiple servers |
 
-The double-dash `--` separator is required. Everything after it is the MCP server command.
+If the policy config defines one server, mcpgate starts that server's `command` or `url`. If it defines multiple servers, pass `--server <name>` to choose one deterministically. The double-dash `--` separator is only needed for the fallback mode where the server command is supplied on the CLI instead of in policy config.
 
 ---
 

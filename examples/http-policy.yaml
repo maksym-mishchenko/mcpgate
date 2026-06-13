@@ -1,0 +1,46 @@
+# examples/http-policy.yaml
+#
+# HTTP transport example for a remote or sidecar MCP server that accepts JSON-RPC
+# over POST. Egress is restricted to the configured hostname.
+#
+# Usage:
+#   export MCPGATE_TOKEN=$(openssl rand -hex 32)
+#   mcpgate --config examples/http-policy.yaml
+
+version: 1
+mode: enforce
+default: "false"
+
+servers:
+  remote-filesystem:
+    url: "http://127.0.0.1:9000/mcp"
+    egress_allow: ["127.0.0.1"]
+
+    tools:
+      read_file:
+        allow: "true"
+        constraints:
+          path:
+            within: ["/srv/safe"]
+
+      write_file:
+        allow: ask
+        constraints:
+          path:
+            within: ["/srv/safe"]
+
+      delete_file:
+        allow: "false"
+
+    resources:
+      allow: "false"
+
+    prompts:
+      allow: false
+
+    sampling:
+      allow: false
+
+heuristics:
+  enabled: true
+  block_on_warn: true

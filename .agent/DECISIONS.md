@@ -11,8 +11,12 @@
 
 -->
 ## [2026-06-13] Repository roadmap as backlog source  #build
-**What:** Added `ROADMAP.md` and aligned README/DESIGN/SECURITY with v1.1 behavior, including interactive approvals, reverse-channel gating, heuristic warnings, and the current primary-server routing limitation.
+**What:** Added `ROADMAP.md` and aligned README/DESIGN/SECURITY with v1.1 behavior, including interactive approvals, reverse-channel gating, heuristic warnings, deterministic configured-server selection, and the current one-active-server-per-process limitation.
 **Why:** GitHub issues and `.agent/STATE.md` had no active backlog, so future agents needed an in-repo source of truth before continuing feature work.
+
+## [2026-06-13] Explicit server selection for multi-server configs  #infra
+**What:** Added `--server` selection for policy configs with multiple `servers` entries. Single-server configs still auto-select, while ambiguous multi-server configs fail fast instead of choosing a map iteration order.
+**Why:** Showcase behavior must be deterministic and honest: mcpgate can configure stdio/HTTP servers, but one process actively fronts one selected MCP server.
 
 ## [2026-05-31] Deterministic injection/exfil signature scanner  #auth
 **What:** A pure, no-I/O scanner detects prompt-injection patterns (ignore-previous, jailbreak) and exfil methods (base64, data-URI, AWS credentials, SSH keys), returning Threat objects with ID/Severity/Snippet; verdicts escalate on block_on_warn (11c4d30).

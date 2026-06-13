@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Deterministic configured-server selection** — `--server` selects a named policy server and is required when multiple servers are configured, avoiding accidental map-order selection.
+- **Showcase documentation** — demo script, HTTP policy example, release checklist, and portfolio-oriented README sections.
+
+### Changed
+- Policy examples now treat `servers.<name>.command` as the source of the stdio server command instead of requiring the fallback `-- <server-command>` form.
+
 ## [1.1.0] - 2026-05-31 — "See the poison"
 
 ### Added

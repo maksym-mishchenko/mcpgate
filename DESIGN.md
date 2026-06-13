@@ -47,8 +47,7 @@ internal/policy/
 internal/proxy/
   proxy.go      The core loop: recv from agent, gate check, forward or deny.
                 Depends on Transport (not stdio directly) and AuditStore (not SQLite directly).
-  router.go     Named transport registry. Current CLI wiring registers configured
-                servers but proxy runtime uses the primary transport.
+  router.go     Named transport registry for future multiplexing work.
 
 internal/audit/
   store.go      AuditStore interface. Injected into proxy, so tests can use a failing stub.
@@ -133,7 +132,7 @@ These are deliberate scope cuts, not oversights. See `ROADMAP.md` for planned se
 
 | Missing feature | Rationale |
 |-----------------|-----------|
-| Full multi-server runtime routing | Policy config can define multiple stdio/HTTP server transports, but the current proxy runtime is wired to the primary configured server. Complete named routing is planned before documenting this as full multi-server support. |
+| Full MCP multiplexing | Policy config can define multiple stdio/HTTP servers, but one mcpgate process runs one selected server. Use `--server` when a config contains multiple servers, or run one gateway process per MCP server. |
 | TLS on the web API | The web API binds only to `127.0.0.1`. Adding TLS is straightforward but adds operational complexity (certificate management) that is out of scope for a local tool. |
 | Symlink resolution in path constraints | Requires disk I/O in the policy engine, which would make it impure and harder to test. Defence-in-depth: the OS and MCP server are expected to enforce their own boundaries. |
 | Structured argument constraints beyond `path` | The constraint system is extensible (`Constraints` struct), but only `path` is implemented. Other field types (numeric ranges, enum values) are future work. |

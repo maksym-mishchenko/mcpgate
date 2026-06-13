@@ -83,7 +83,7 @@ When mcpgate shuts down (or the context is cancelled), it sends `SIGTERM` to the
 - **No TLS:** The web API listens on plain HTTP. The localhost-only bind and Host-check mitigate this for local use, but do not use mcpgate as a remotely-accessible service without adding a TLS terminator.
 - **No symlink resolution in path checks:** Path constraints check the string value of the `path` argument. They do not resolve symlinks. A tool that follows a symlink out of the allowed root will not be caught by mcpgate's path constraint — it depends on the MCP server or OS to enforce filesystem boundaries.
 - **TOCTOU:** Path validation occurs at policy-check time, not at actual filesystem access time. This is a known limitation documented in the source (`internal/policy/engine.go`).
-- **Primary-server runtime routing:** Current CLI wiring registers configured server transports but the proxy runtime uses the primary server transport. Treat full named multi-server routing as roadmap work until proxy routing is completed.
+- **One active configured server per process:** mcpgate can define multiple policy servers, but one process runs one selected server. Use `--server` when a config contains multiple servers, or run one mcpgate process per MCP server.
 
 ---
 

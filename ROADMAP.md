@@ -5,18 +5,19 @@ This roadmap tracks the next practical work for mcpgate after v1.1.0. GitHub iss
 ## Current baseline
 
 - Latest release: v1.1.0, "See the poison".
-- Core security invariants are implemented: deny-by-default policy, write-ahead SQLite audit, fail-closed forwarding, HMAC-verifiable audit exports, interactive approval, reverse-channel gating, and deterministic heuristic warnings.
+- Core security invariants are implemented: deny-by-default policy, write-ahead SQLite audit, fail-closed forwarding, HMAC-verifiable audit exports, interactive approval, reverse-channel gating, deterministic heuristic warnings, and deterministic configured-server selection.
 - Local worktree note: Go commands in this Copilot worktree may need `-buildvcs=false` because VCS stamping can fail in the generated worktree path.
 
 ## v1.2.0 — Documentation and operator hardening
 
 | Priority | Item | Outcome |
 |---|---|---|
-| P0 | Keep README, DESIGN, SECURITY, and examples aligned with v1.1 behavior | Operators do not follow stale v0.1/v0.2 guidance |
-| P0 | Complete multi-server routing design | Decide whether the current first-server behavior remains a supported limitation or whether proxy routing should select named transports per request |
+| Done | Keep README, DESIGN, SECURITY, and examples aligned with v1.1 behavior | Operators do not follow stale v0.1/v0.2 guidance |
+| Done | Make configured-server selection deterministic | `--server` selects a configured server and multi-server configs fail fast without an explicit choice |
+| P0 | Design full MCP multiplexing, if still needed | Decide whether one mcpgate process should ever expose multiple MCP servers at once, or whether clients should run one gateway per MCP server |
 | P1 | Document production-safe secret handling | No project guidance should hardcode API tokens; dashboard/mission-control tokens must live in a secret manager or environment variable and be rotated outside the repo |
-| P1 | Add operator examples for stdio and HTTP policies | Users can configure local and remote MCP servers without reading source |
-| P2 | Add release checklist | Tags, changelog, tests, and GoReleaser checks are explicit before every release |
+| Done | Add operator examples for stdio and HTTP policies | Users can configure local and remote MCP servers without reading source |
+| Done | Add release checklist | Tags, changelog, tests, and GoReleaser checks are explicit before every release |
 
 ## v1.3.0 — Policy and path hardening
 

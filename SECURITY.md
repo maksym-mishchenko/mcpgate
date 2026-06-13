@@ -41,11 +41,12 @@ for known prompt-injection and tool-poisoning patterns.
 
 ### Token authentication
 
-Every web API endpoint (`/health`, `/approve`, `/events`) requires a `Bearer` token. The token is set via `--token` flag or the `MCPGATE_TOKEN` environment variable.
+Every web API endpoint (`/health`, `/approve`, `/pending`, `/audit`, `/events`) requires a `Bearer` token. The token is set via `--token` flag or the `MCPGATE_TOKEN` environment variable.
 
 - There is no unauthenticated guest mode.
 - Tokens are compared with `==` (constant-time comparison is appropriate here since the token never travels over a real network — it stays on localhost — but callers should use a high-entropy random value).
 - Recommendation: generate with `openssl rand -hex 32`.
+- Do not commit operational tokens, dashboard API tokens, or `MCPGATE_TOKEN` values to repositories or shared instruction files. Store them in a secret manager or environment-specific secret store and rotate any value that has been exposed outside that boundary.
 
 ### Anti-DNS-rebinding (Host header check)
 
@@ -82,6 +83,7 @@ When mcpgate shuts down (or the context is cancelled), it sends `SIGTERM` to the
 - **No TLS:** The web API listens on plain HTTP. The localhost-only bind and Host-check mitigate this for local use, but do not use mcpgate as a remotely-accessible service without adding a TLS terminator.
 - **No symlink resolution in path checks:** Path constraints check the string value of the `path` argument. They do not resolve symlinks. A tool that follows a symlink out of the allowed root will not be caught by mcpgate's path constraint — it depends on the MCP server or OS to enforce filesystem boundaries.
 - **TOCTOU:** Path validation occurs at policy-check time, not at actual filesystem access time. This is a known limitation documented in the source (`internal/policy/engine.go`).
+- **Primary-server runtime routing:** Current CLI wiring registers configured server transports but the proxy runtime uses the primary server transport. Treat full named multi-server routing as roadmap work until proxy routing is completed.
 
 ---
 

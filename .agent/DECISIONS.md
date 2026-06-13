@@ -10,6 +10,10 @@
 **Rejected:** <alternatives and why not> (optional)
 
 -->
+## [2026-06-13] Repository roadmap as backlog source  #build
+**What:** Added `ROADMAP.md` and aligned README/DESIGN/SECURITY with v1.1 behavior, including interactive approvals, reverse-channel gating, heuristic warnings, and the current primary-server routing limitation.
+**Why:** GitHub issues and `.agent/STATE.md` had no active backlog, so future agents needed an in-repo source of truth before continuing feature work.
+
 ## [2026-05-31] Deterministic injection/exfil signature scanner  #auth
 **What:** A pure, no-I/O scanner detects prompt-injection patterns (ignore-previous, jailbreak) and exfil methods (base64, data-URI, AWS credentials, SSH keys), returning Threat objects with ID/Severity/Snippet; verdicts escalate on block_on_warn (11c4d30).
 **Why:** Defense-in-depth against poisoning — heuristics catch common attack vectors in both outbound args and reverse-channel content.

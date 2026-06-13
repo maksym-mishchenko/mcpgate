@@ -31,8 +31,7 @@ servers:
             within: ["/home/user/safe"]
 
       # write_file: requires human approval before executing.
-      # NOTE: In v0.1, "ask" is treated as "false" (deny). Interactive
-      # approval UI is planned for v0.2.
+      # The browser UI shows an approval card and auto-denies on timeout.
       write_file:
         allow: ask
         constraints:

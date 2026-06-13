@@ -2,7 +2,7 @@
 
 **Zero-Trust MCP Gateway** — a deny-by-default firewall/proxy for the [Model Context Protocol](https://modelcontextprotocol.io).
 
-mcpgate sits between an AI agent and an MCP server. Every `tools/call` and `resources/read` the agent tries to make is evaluated against a YAML policy before it reaches the real server. Unknown or denied calls are blocked and logged; nothing passes through without an explicit `allow: true`.
+mcpgate sits between an AI agent and an MCP server. Every gated `tools/call`, `resources/read`, `prompts/get`, and reverse-channel `sampling/createMessage` is evaluated against a YAML policy before it reaches the other side. Unknown or denied calls are blocked and logged; nothing passes through without an explicit allow decision.
 
 ---
 
@@ -23,10 +23,10 @@ AI Agent (e.g. Claude)
 ```
 
 1. The agent's stdin/stdout is piped through mcpgate instead of directly to the MCP server.
-2. mcpgate spawns the real MCP server as a child process (in its own process group).
-3. For every gated method (`tools/call`, `resources/read`) the policy engine runs.
+2. mcpgate connects to the configured MCP server over stdio or HTTP.
+3. For every gated method (`tools/call`, `resources/read`, `prompts/get`, and reverse-channel `sampling/createMessage`) the policy engine runs.
 4. The verdict (`ALLOW` / `DENY` / `ASK`) is written to a SQLite audit log **before** the call is forwarded.
-5. A small HTTP server on `127.0.0.1:18789` exposes `/health`, `/approve`, and `/events`.
+5. A small HTTP server on `127.0.0.1:18789` exposes the browser dashboard, `/health`, `/approve`, `/pending`, `/audit`, and `/events`.
 
 ---
 
@@ -81,8 +81,8 @@ heuristics:
 ### Run
 
 ```bash
-# Set a token for the web API (required)
-export MCPGATE_TOKEN=my-secret-token
+# Set a high-entropy token for the web API (required)
+export MCPGATE_TOKEN="$(openssl rand -hex 32)"
 
 # Run — mcpgate wraps the MCP server command
 mcpgate --config mcpgate.yaml -- /usr/local/bin/mcp-filesystem --root /home/user/safe
@@ -96,7 +96,7 @@ Configure your AI client to use mcpgate's stdio instead of the MCP server direct
     "filesystem": {
       "command": "mcpgate",
       "args": ["--config", "/path/to/mcpgate.yaml", "--", "/usr/local/bin/mcp-filesystem", "--root", "/home/user/safe"],
-      "env": { "MCPGATE_TOKEN": "my-secret-token" }
+      "env": { "MCPGATE_TOKEN": "<generate-a-random-token>" }
     }
   }
 }
@@ -113,7 +113,9 @@ default: "false"     # default verdict for unmatched calls: "true" | "false" | "
 
 servers:
   <server-name>:     # must match the executable name passed as the first arg after --
-    command: []      # informational — not used to spawn the process (args come from CLI)
+    command: []      # stdio server command; omit when using url
+    url: ""          # HTTP JSON-RPC endpoint; omit when using command
+    egress_allow: [] # optional hostname allowlist for HTTP transport
     tools:
       <tool-name>:
         allow: "true" | "false" | ask
@@ -125,13 +127,21 @@ servers:
             matches: "regex"              # path must match this anchored regex
     resources:
       allow: "true" | "false" | ask
+    prompts:
+      allow: true | false
+    sampling:
+      allow: true | false
+
+heuristics:
+  enabled: true        # default when omitted
+  block_on_warn: false # opt in to deny and withhold on deterministic scanner matches
 ```
 
 **Modes:**
 
 | Mode | Behaviour |
 |------|-----------|
-| `enforce` | `DENY` all calls not explicitly `allow: "true"`. `ask` is currently treated as deny (v0.1). |
+| `enforce` | `DENY` all calls not explicitly `allow: "true"`. `ask` parks the call for human approval and auto-denies on timeout. |
 | `observe` | All calls pass through. Useful for discovering what an agent actually calls. |
 
 **Allow values:**
@@ -140,7 +150,7 @@ servers:
 |-------|---------|
 | `"true"` | Allow (after constraint check) |
 | `"false"` | Deny immediately |
-| `ask` | Interactive approval — treated as deny in v0.1 headless mode |
+| `ask` | Interactive approval through the local browser UI; timeout resolves as deny |
 
 ---
 
@@ -155,6 +165,7 @@ mcpgate [flags] -- <server-command> [server-args...]
 | `--config` | `mcpgate.yaml` | Path to policy YAML file |
 | `--token` | `$MCPGATE_TOKEN` | Bearer token for web API authentication |
 | `--addr` | `127.0.0.1:18789` | Web server listen address |
+| `--approval-timeout` | `30s` | How long an `ask` call waits before auto-deny |
 
 The double-dash `--` separator is required. Everything after it is the MCP server command.
 
@@ -172,9 +183,25 @@ Returns `{"status":"ok"}` when the gateway is running.
 curl -H "Authorization: Bearer $MCPGATE_TOKEN" http://127.0.0.1:18789/health
 ```
 
+### `GET /pending`
+
+Returns currently parked `ask` calls, so a browser can reconnect without losing pending approvals.
+
+```bash
+curl -H "Authorization: Bearer $MCPGATE_TOKEN" http://127.0.0.1:18789/pending
+```
+
+### `GET /audit`
+
+Returns the latest 100 audit entries from SQLite, newest first.
+
+```bash
+curl -H "Authorization: Bearer $MCPGATE_TOKEN" http://127.0.0.1:18789/audit
+```
+
 ### `POST /approve`
 
-Resolve a pending `ask` approval (reserved for v0.2 interactive mode).
+Resolve a pending `ask` approval.
 
 ```bash
 curl -X POST -H "Authorization: Bearer $MCPGATE_TOKEN" \
@@ -206,7 +233,9 @@ Events are broadcast as `event: <name>\ndata: <json>\n\n`.
 - **Token authentication:** All web API endpoints require a matching Bearer token. There is no guest mode.
 - **Anti-DNS-rebinding:** The `Host` header is checked on every request. Only `localhost` and `127.0.0.1` are accepted, regardless of the token.
 - **Deny by default:** Unmatched calls return `DENY` in enforce mode. You must explicitly opt in to allow a tool.
-- **Process isolation:** The MCP server is spawned with `Setpgid: true` so `SIGTERM`/`SIGKILL` reaches the whole subprocess tree, not just the direct child.
+- **Interactive approval:** `ask` calls are parked for approval in the local UI and denied automatically on timeout.
+- **Prompt-poisoning detection:** Deterministic scanner warnings are signed into the audit chain and can be escalated with `heuristics.block_on_warn`.
+- **Process isolation:** stdio MCP servers are spawned with process-group isolation so `SIGTERM`/`SIGKILL` reaches the whole subprocess tree, not just the direct child.
 
 ---
 
@@ -221,9 +250,10 @@ internal/
   approval/        — coordinator for pending human approvals
   child/           — spawn/stop child MCP server process
   codec/           — newline-delimited JSON-RPC reader/writer
-  transport/       — Transport interface (stdio implementation)
-  web/             — HTTP server (/health, /approve, /events)
+  transport/       — Transport interface (stdio and HTTP implementations)
+  web/             — HTTP server (/health, /approve, /pending, /audit, /events)
   jsonrpc/         — minimal JSON-RPC message type
+  scanner/         — deterministic injection/exfiltration signatures
 ```
 
 ---

@@ -18,6 +18,14 @@
 **What:** Added `--server` selection for policy configs with multiple `servers` entries. Single-server configs still auto-select, while ambiguous multi-server configs fail fast instead of choosing a map iteration order.
 **Why:** Showcase behavior must be deterministic and honest: mcpgate can configure stdio/HTTP servers, but one process actively fronts one selected MCP server.
 
+## [2026-06-13] Showcase hardening pass  #ui
+**What:** Added constant-time web token comparison, dashboard audit filters with expandable warning details, and audit retention/rotation guidance.
+**Why:** Showcase-quality governance needs visible triage, safer auth defaults, and an operator story for preserving tamper-evident logs over time.
+
+## [2026-06-13] Structured constraints and symlink checks  #auth
+**What:** Added `constraints.fields` for exact/enum/regex/numeric/bool arguments and opt-in `path.resolve_within` for symlink-aware existing-path containment.
+**Why:** Showcase policies need to control more than file paths, while filesystem reads need an optional defense against symlink escapes without changing the default pure string check behavior.
+
 ## [2026-05-31] Deterministic injection/exfil signature scanner  #auth
 **What:** A pure, no-I/O scanner detects prompt-injection patterns (ignore-previous, jailbreak) and exfil methods (base64, data-URI, AWS credentials, SSH keys), returning Threat objects with ID/Severity/Snippet; verdicts escalate on block_on_warn (11c4d30).
 **Why:** Defense-in-depth against poisoning — heuristics catch common attack vectors in both outbound args and reverse-channel content.

@@ -65,12 +65,23 @@ type ResourceRule struct {
 }
 
 type Constraints struct {
-	Path *PathConstraint `yaml:"path,omitempty"`
+	Path   *PathConstraint            `yaml:"path,omitempty"`
+	Fields map[string]FieldConstraint `yaml:"fields,omitempty"`
 }
 
 type PathConstraint struct {
-	Within  []string `yaml:"within,omitempty"`
-	Matches string   `yaml:"matches,omitempty"`
+	Within        []string `yaml:"within,omitempty"`
+	ResolveWithin []string `yaml:"resolve_within,omitempty"`
+	Matches       string   `yaml:"matches,omitempty"`
+	Equals        string   `yaml:"equals,omitempty"`
+	OneOf         []string `yaml:"one_of,omitempty"`
+}
+
+type FieldConstraint struct {
 	Equals  string   `yaml:"equals,omitempty"`
 	OneOf   []string `yaml:"one_of,omitempty"`
+	Matches string   `yaml:"matches,omitempty"`
+	Min     *float64 `yaml:"min,omitempty"`
+	Max     *float64 `yaml:"max,omitempty"`
+	Bool    *bool    `yaml:"bool,omitempty"`
 }

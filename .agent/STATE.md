@@ -7,6 +7,9 @@ Last updated: 2026-06-13 by copilot
 - Added deterministic `--server` selection for configs with multiple servers.
 - Added showcase demo docs, HTTP policy example, and release checklist.
 - Created GitHub issues for remaining showcase/hardening work.
+- Added constant-time web token comparison, dashboard audit filters/warning details, and audit retention guidance.
+- Added structured field constraints and opt-in symlink-aware `path.resolve_within` checks.
+- Added a safe static dashboard screenshot at `docs/assets/showcase-dashboard.png`.
 
 ## In progress
 
@@ -16,4 +19,4 @@ Last updated: 2026-06-13 by copilot
 - Any dashboard or Mission Control API token that appeared in shared instructions must be rotated through the owning secret-management workflow.
 
 ## Next steps
-- Use the GitHub issue backlog for remaining hardening work and demo media capture.
+- Use the GitHub issue backlog for remaining hardening work, especially full multiplexing, secret rotation, and showcase GIF/video capture.

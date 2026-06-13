@@ -18,23 +18,25 @@ This roadmap tracks the next practical work for mcpgate after v1.1.0. GitHub iss
 | P1 | Document production-safe secret handling | No project guidance should hardcode API tokens; dashboard/mission-control tokens must live in a secret manager or environment variable and be rotated outside the repo |
 | Done | Add operator examples for stdio and HTTP policies | Users can configure local and remote MCP servers without reading source |
 | Done | Add release checklist | Tags, changelog, tests, and GoReleaser checks are explicit before every release |
+| Done | Add static dashboard screenshot | README and showcase docs include a safe demo screenshot with no live secrets |
+| P1 | Record showcase GIF or short video | Portfolio/demo flow can be shown without a live setup |
 
 ## v1.3.0 — Policy and path hardening
 
 | Priority | Item | Outcome |
 |---|---|---|
-| P0 | Symlink-aware path enforcement option | Operators can opt into realpath checks when filesystem access is available |
+| Done | Symlink-aware path enforcement option | Operators can opt into realpath checks when filesystem access is available |
 | P0 | TOCTOU guidance and tests | Path checks document the boundary between policy-time validation and child-process I/O |
-| P1 | Structured constraints beyond `path` | Policy can constrain enum/string/numeric arguments without custom tool wrappers |
-| P1 | Constant-time token comparison | Web authentication avoids token-comparison side-channel concerns even for localhost-only deployment |
-| P2 | Audit retention and rotation guidance | Long-running deployments have an operational story for SQLite growth |
+| Done | Structured constraints beyond `path` | Policy can constrain enum/string/numeric arguments without custom tool wrappers |
+| Done | Constant-time token comparison | Web authentication avoids token-comparison side-channel concerns even for localhost-only deployment |
+| Done | Audit retention and rotation guidance | Long-running deployments have an operational story for SQLite growth |
 
 ## v1.4.0 — Governance UX
 
 | Priority | Item | Outcome |
 |---|---|---|
 | P0 | Human approval audit improvements | Approval source, timeout, and UI decisions are easy to filter and export |
-| P1 | Warning triage in the dashboard | Operators can inspect signature IDs/snippets without reading raw audit rows |
+| Done | Warning triage in the dashboard | Operators can inspect signature IDs/snippets without reading raw audit rows |
 | P1 | Policy discovery mode workflow | Observe-mode output can be converted into least-privilege draft policy safely |
 | P2 | Import/export examples for audit review | Security review handoff is reproducible from JSON Lines exports |
 

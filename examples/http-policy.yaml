@@ -22,12 +22,16 @@ servers:
         constraints:
           path:
             within: ["/srv/safe"]
+            resolve_within: ["/srv/safe"]
 
       write_file:
         allow: ask
         constraints:
           path:
             within: ["/srv/safe"]
+          fields:
+            mode:
+              one_of: ["create", "overwrite"]
 
       delete_file:
         allow: "false"

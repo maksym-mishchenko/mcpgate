@@ -30,11 +30,16 @@ Configure the MCP client to run `mcpgate --config /path/to/examples/simple-polic
 | 3 | Delete `/home/user/safe/notes.txt` | `DENY` | Agent receives a policy error; audit feed records deny |
 | 4 | Return content containing "ignore previous instructions" | `WARN` or `DENY` with `block_on_warn` | Warning badge appears in the signed audit entry |
 
+## Assets
+
+- Static dashboard screenshot: [`docs/assets/showcase-dashboard.png`](assets/showcase-dashboard.png)
+- Remaining media work: capture an end-to-end GIF or short recording with the dashboard, terminal, and policy file side-by-side.
+
 ## Screenshot and recording checklist
 
-1. Dashboard connected state.
+1. Dashboard connected state. Captured in [`docs/assets/showcase-dashboard.png`](assets/showcase-dashboard.png).
 2. Pending approval card for `write_file`.
-3. Live audit table showing `ALLOW`, `DENY`, and warning badge rows.
+3. Live audit table showing `ALLOW`, `DENY`, warning badge rows, and filters.
 4. Terminal showing `mcpgate verify --file audit.jsonl` succeeding after export.
 5. Policy YAML beside the dashboard to show the allow/ask/deny mapping.
 

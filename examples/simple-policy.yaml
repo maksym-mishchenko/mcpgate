@@ -41,6 +41,9 @@ servers:
         constraints:
           path:
             within: ["/home/user/safe"]
+          fields:
+            recursive:
+              bool: false
 
       # delete_file: hard deny — no exceptions.
       delete_file:

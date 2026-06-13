@@ -3,6 +3,7 @@ package policy
 import (
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -112,19 +113,35 @@ func defaultVerdict(d Allow) Verdict {
 }
 
 func checkConstraints(c *Constraints, args map[string]string) Verdict {
-	if c.Path == nil {
-		return VerdictAllow
+	if c.Path != nil {
+		pathVal, ok := args["path"]
+		if !ok {
+			return VerdictAllow // no path arg → constraint not applicable
+		}
+		if v := checkPathConstraint(c.Path, pathVal); v != VerdictAllow {
+			return v
+		}
 	}
-	pathVal, ok := args["path"]
-	if !ok {
-		return VerdictAllow // no path arg → constraint not applicable
+	for field, constraint := range c.Fields {
+		val, ok := args[field]
+		if !ok {
+			return VerdictDeny
+		}
+		if !checkFieldConstraint(constraint, val) {
+			return VerdictDeny
+		}
 	}
-	return checkPathConstraint(c.Path, pathVal)
+	return VerdictAllow
 }
 
 func checkPathConstraint(pc *PathConstraint, val string) Verdict {
 	if len(pc.Within) > 0 {
 		if !pathWithin(val, pc.Within) {
+			return VerdictDeny
+		}
+	}
+	if len(pc.ResolveWithin) > 0 {
+		if !pathResolveWithin(val, pc.ResolveWithin) {
 			return VerdictDeny
 		}
 	}
@@ -149,6 +166,49 @@ func checkPathConstraint(pc *PathConstraint, val string) Verdict {
 		}
 	}
 	return VerdictAllow
+}
+
+func checkFieldConstraint(c FieldConstraint, val string) bool {
+	if c.Equals != "" && val != c.Equals {
+		return false
+	}
+	if len(c.OneOf) > 0 {
+		found := false
+		for _, allowed := range c.OneOf {
+			if val == allowed {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if c.Matches != "" && !matchesAnchored(c.Matches, val) {
+		return false
+	}
+	if c.Min != nil || c.Max != nil {
+		n, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return false
+		}
+		if c.Min != nil && n < *c.Min {
+			return false
+		}
+		if c.Max != nil && n > *c.Max {
+			return false
+		}
+	}
+	if c.Bool != nil {
+		b, err := strconv.ParseBool(val)
+		if err != nil {
+			return false
+		}
+		if b != *c.Bool {
+			return false
+		}
+	}
+	return true
 }
 
 // pathWithin returns true only if val is a clean, absolute path that is
@@ -177,6 +237,22 @@ func pathWithin(val string, roots []string) bool {
 		}
 	}
 	return false
+}
+
+func pathResolveWithin(val string, roots []string) bool {
+	resolvedVal, err := filepath.EvalSymlinks(val)
+	if err != nil {
+		return false
+	}
+	resolvedRoots := make([]string, 0, len(roots))
+	for _, root := range roots {
+		resolvedRoot, err := filepath.EvalSymlinks(root)
+		if err != nil {
+			return false
+		}
+		resolvedRoots = append(resolvedRoots, resolvedRoot)
+	}
+	return pathWithin(resolvedVal, resolvedRoots)
 }
 
 // matchesAnchored compiles a RE2 pattern anchored at both ends and matches val.

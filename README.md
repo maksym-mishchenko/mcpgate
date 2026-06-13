@@ -13,6 +13,8 @@ The fastest way to understand mcpgate is the showcase flow in [`docs/SHOWCASE.md
 3. A dangerous delete is denied by policy before it reaches the MCP server.
 4. Prompt-injection or exfiltration text is flagged in the signed audit trail and can be blocked with `heuristics.block_on_warn`.
 
+![mcpgate dashboard showing pending approvals, audit filters, and warning details](docs/assets/showcase-dashboard.png)
+
 ## Highlights
 
 - Deny-by-default YAML policy for MCP tools, resources, prompts, and reverse-channel sampling.
@@ -140,9 +142,20 @@ servers:
         constraints:          # optional; only evaluated when allow is "true"
           path:
             within: ["/allowed/prefix"]   # path must be under one of these roots
+            resolve_within: ["/allowed/prefix"] # optional symlink-aware check for existing paths
             equals: "/exact/path"         # path must equal this exactly
             one_of: ["/a", "/b"]          # path must be one of these values
             matches: "regex"              # path must match this anchored regex
+          fields:
+            mode:
+              one_of: ["read", "search"]
+            limit:
+              min: 1
+              max: 100
+            include_hidden:
+              bool: false
+            query:
+              matches: "[a-z0-9 _-]+"
     resources:
       allow: "true" | "false" | ask
     prompts:
@@ -169,6 +182,19 @@ heuristics:
 | `"true"` | Allow (after constraint check) |
 | `"false"` | Deny immediately |
 | `ask` | Interactive approval through the local browser UI; timeout resolves as deny |
+
+**Constraints:**
+
+| Constraint | Applies to | Behavior |
+|---|---|---|
+| `path.within` | `arguments.path` | String-level absolute path containment check; no symlink resolution |
+| `path.resolve_within` | `arguments.path` | Opt-in `EvalSymlinks` containment check for existing paths; fails closed if the path or root cannot be resolved |
+| `path.equals` / `path.one_of` / `path.matches` | `arguments.path` | Exact, enum, or anchored RE2 checks |
+| `fields.<name>.equals` / `one_of` / `matches` | any string argument | Exact, enum, or anchored RE2 checks |
+| `fields.<name>.min` / `max` | numeric argument | Parses the argument as a float and denies on parse/range failure |
+| `fields.<name>.bool` | boolean argument | Parses the argument as a bool and denies on mismatch |
+
+Missing constrained fields deny the call. Invalid regexes, unparseable numbers, unparseable booleans, and unresolved symlinks fail closed.
 
 ---
 
@@ -217,6 +243,8 @@ Returns the latest 100 audit entries from SQLite, newest first.
 ```bash
 curl -H "Authorization: Bearer $MCPGATE_TOKEN" http://127.0.0.1:18789/audit
 ```
+
+For long-running deployments, export and verify audit logs before archival or rotation. See [`docs/AUDIT_RETENTION.md`](docs/AUDIT_RETENTION.md).
 
 ### `POST /approve`
 

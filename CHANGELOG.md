@@ -5,9 +5,15 @@
 ### Added
 - **Deterministic configured-server selection** — `--server` selects a named policy server and is required when multiple servers are configured, avoiding accidental map-order selection.
 - **Showcase documentation** — demo script, HTTP policy example, release checklist, and portfolio-oriented README sections.
+- **Dashboard audit filtering** — local UI filters audit rows by verdict, method, server, and warning presence, with expandable warning details.
+- **Audit retention guidance** — documented export/verify-first rotation workflow for long-running deployments.
+- **Structured argument constraints** — policy can constrain non-path fields with exact values, enums, anchored regexes, numeric ranges, and booleans.
+- **Symlink-aware path checks** — optional `path.resolve_within` resolves existing paths and roots before allowing filesystem operations.
+- **Showcase dashboard screenshot** — README and showcase docs now include a safe static dashboard capture.
 
 ### Changed
 - Policy examples now treat `servers.<name>.command` as the source of the stdio server command instead of requiring the fallback `-- <server-command>` form.
+- Web API token checks now compare SHA-256 digests with constant-time comparison.
 
 ## [1.1.0] - 2026-05-31 — "See the poison"
 

@@ -25,6 +25,7 @@ Use this checklist before tagging a showcase or public release.
    ```
 
 5. Confirm no secrets or real tokens appear in docs, examples, or config.
+6. If the release changes audit behavior, run an export/verify cycle and update `docs/AUDIT_RETENTION.md`.
 
 ## Release
 

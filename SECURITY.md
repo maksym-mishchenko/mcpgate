@@ -44,7 +44,7 @@ for known prompt-injection and tool-poisoning patterns.
 Every web API endpoint (`/health`, `/approve`, `/pending`, `/audit`, `/events`) requires a `Bearer` token. The token is set via `--token` flag or the `MCPGATE_TOKEN` environment variable.
 
 - There is no unauthenticated guest mode.
-- Tokens are compared with `==` (constant-time comparison is appropriate here since the token never travels over a real network — it stays on localhost — but callers should use a high-entropy random value).
+- Tokens are hashed with SHA-256 and compared with constant-time comparison.
 - Recommendation: generate with `openssl rand -hex 32`.
 - Do not commit operational tokens, dashboard API tokens, or `MCPGATE_TOKEN` values to repositories or shared instruction files. Store them in a secret manager or environment-specific secret store and rotate any value that has been exposed outside that boundary.
 
@@ -62,6 +62,8 @@ This means the audit log is always authoritative: every call that reached the MC
 
 The audit store interface (`audit.AuditStore`) is injected, making it possible to test fail-closed behaviour with a failing stub — the test suite does this.
 
+For retention and rotation, export and verify audit chains before archival. Do not delete rows in place; see `docs/AUDIT_RETENTION.md`.
+
 ### Process isolation (Setpgid)
 
 The MCP server child process is started with `syscall.SysProcAttr{Setpgid: true}`. This places the child in its own process group.
@@ -73,7 +75,9 @@ When mcpgate shuts down (or the context is cancelled), it sends `SIGTERM` to the
 - **Deny by default:** In `enforce` mode, any tool call not matched by an explicit policy rule returns `DENY`. There is no implicit allow.
 - **Explicit allowlist:** Tools must be listed under `servers.<name>.tools` with `allow: "true"` to be forwarded.
 - **Path traversal protection:** The `path.within` constraint rejects relative paths, empty paths, and paths that are not component-wise children of the allowed roots. For example, `/home/safe-evil` will not pass a `/home/safe` constraint. See `internal/policy/engine.go` for the `pathWithin` function.
+- **Symlink-aware path checks:** Use `path.resolve_within` when a tool operates on existing filesystem paths and the gateway should resolve symlinks before allowing the call. It fails closed when the path or root cannot be resolved.
 - **Constraint coverage:** Constraints are checked on the tool's `arguments.path` field. If no `path` argument is present, the constraint is not applicable and the allow value alone determines the verdict. This is intentional — constraints are defence-in-depth, not the primary gate.
+- **Structured argument constraints:** `constraints.fields` can enforce exact values, enums, anchored regexes, numeric ranges, and booleans for non-path arguments. Missing or malformed constrained arguments deny the call.
 - **Observe mode:** Setting `mode: observe` bypasses enforcement and allows all calls through. This mode is intended for discovery, not production use. Do not use `observe` mode in any environment where the MCP server has access to sensitive resources.
 
 ---
@@ -81,7 +85,7 @@ When mcpgate shuts down (or the context is cancelled), it sends `SIGTERM` to the
 ## Known limitations
 
 - **No TLS:** The web API listens on plain HTTP. The localhost-only bind and Host-check mitigate this for local use, but do not use mcpgate as a remotely-accessible service without adding a TLS terminator.
-- **No symlink resolution in path checks:** Path constraints check the string value of the `path` argument. They do not resolve symlinks. A tool that follows a symlink out of the allowed root will not be caught by mcpgate's path constraint — it depends on the MCP server or OS to enforce filesystem boundaries.
+- **Symlink checks are opt-in and existing-path only:** `path.resolve_within` uses filesystem resolution and fails closed if the path does not exist. Use `path.within` for create/write flows where the final path may not exist yet.
 - **TOCTOU:** Path validation occurs at policy-check time, not at actual filesystem access time. This is a known limitation documented in the source (`internal/policy/engine.go`).
 - **One active configured server per process:** mcpgate can define multiple policy servers, but one process runs one selected server. Use `--server` when a config contains multiple servers, or run one mcpgate process per MCP server.
 

@@ -37,8 +37,8 @@ This roadmap tracks the next practical work for mcpgate after v1.1.0. GitHub iss
 |---|---|---|
 | Done | Human approval audit improvements | Approval source, timeout, and UI decisions are easy to filter and export |
 | Done | Warning triage in the dashboard | Operators can inspect signature IDs/snippets without reading raw audit rows |
-| P1 | Policy discovery mode workflow | Observe-mode output can be converted into least-privilege draft policy safely |
-| P2 | Import/export examples for audit review | Security review handoff is reproducible from JSON Lines exports |
+| Done | Policy discovery mode workflow | Observe-mode output can be converted into least-privilege draft policy safely |
+| Done | Import/export examples for audit review | Security review handoff is reproducible from JSON Lines exports |
 
 ## Blocked / needs explicit approval
 

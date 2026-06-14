@@ -53,6 +53,17 @@ func main() {
 			}
 			return
 
+		case "discover":
+			fs := flag.NewFlagSet("discover", flag.ExitOnError)
+			fileFlag := fs.String("file", "-", "verified audit JSON Lines file ('-' for stdin)")
+			outFlag := fs.String("out", "draft-policy.yaml", "draft policy output file ('-' for stdout)")
+			fs.Parse(os.Args[2:]) //nolint:errcheck
+			if err := runDiscover(*fileFlag, *outFlag); err != nil {
+				fmt.Fprintf(os.Stderr, "discover: %v\n", err)
+				os.Exit(1)
+			}
+			return
+
 		case "verify":
 			fs := flag.NewFlagSet("verify", flag.ExitOnError)
 			fileFlag := fs.String("file", "-", "JSON Lines file to verify ('-' for stdin)")

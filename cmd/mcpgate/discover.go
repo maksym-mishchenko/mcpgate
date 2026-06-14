@@ -26,13 +26,17 @@ type discoveryResult struct {
 	skippedWarnings int
 }
 
-func runDiscover(filePath, outPath string) error {
+func runDiscover(filePath, outPath string) (retErr error) {
 	in, err := openInput(filePath)
 	if err != nil {
 		return err
 	}
 	if in != os.Stdin {
-		defer in.Close()
+		defer func() {
+			if err := in.Close(); err != nil && retErr == nil {
+				retErr = fmt.Errorf("close input file: %w", err)
+			}
+		}()
 	}
 
 	result, err := discoverPolicy(in)
@@ -41,6 +45,7 @@ func runDiscover(filePath, outPath string) error {
 	}
 
 	var out *os.File
+	closeOutput := func() error { return nil }
 	if outPath == "-" {
 		out = os.Stdout
 	} else {
@@ -48,10 +53,21 @@ func runDiscover(filePath, outPath string) error {
 		if err != nil {
 			return fmt.Errorf("create output file: %w", err)
 		}
-		defer out.Close()
+		closeOutput = func() error {
+			if err := out.Close(); err != nil {
+				return fmt.Errorf("close output file: %w", err)
+			}
+			return nil
+		}
 	}
 
 	if err := writeDraftPolicy(out, result); err != nil {
+		if closeErr := closeOutput(); closeErr != nil {
+			return fmt.Errorf("%w; %w", err, closeErr)
+		}
+		return err
+	}
+	if err := closeOutput(); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "discover: wrote %d allowed rows", result.allowedRows)

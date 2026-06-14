@@ -220,6 +220,16 @@ If the policy config defines one server, mcpgate starts that server's `command` 
 
 mcpgate intentionally runs one active MCP server per process. For multiple MCP servers, configure one client entry and one mcpgate process per server; share a policy file if that makes operations simpler, but select each server explicitly with `--server`.
 
+### Audit subcommands
+
+```bash
+mcpgate export --db mcpgate.db --out audit-review.jsonl
+mcpgate verify --file audit-review.jsonl
+mcpgate discover --file audit-review.jsonl --out draft-policy.yaml
+```
+
+`discover` converts a verified observe-mode audit export into a conservative `mode: enforce` draft policy. It includes only warning-free `ALLOW` rows, keeps `default: "false"`, and uses placeholder server commands so operators must review transport settings and add path/field constraints before use. See [`docs/AUDIT_REVIEW.md`](docs/AUDIT_REVIEW.md).
+
 ---
 
 ## Web API reference

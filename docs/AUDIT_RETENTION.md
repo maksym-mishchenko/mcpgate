@@ -45,3 +45,5 @@ Do not rotate by deleting rows from SQLite. Row deletion can create sequence gap
 ## Demo recommendation
 
 For the showcase demo, start from a clean `mcpgate.db`, perform the allow/ask/deny/warn flow, export to JSONL, and run `mcpgate verify` on camera. This makes the audit story visible without needing production log infrastructure.
+
+For review handoff and policy discovery examples, see `docs/AUDIT_REVIEW.md`.

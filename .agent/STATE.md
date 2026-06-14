@@ -15,6 +15,8 @@ Last updated: 2026-06-14 by copilot
 - Tightened path-constrained `allow: "true"` rules so missing `arguments.path` fails closed.
 - Added deterministic TOCTOU/path-boundary tests and updated operator guidance for `path.within` versus `path.resolve_within`.
 - Added `approval_source` audit metadata and dashboard filtering for policy, human, timeout, and heuristic decisions.
+- Added `mcpgate discover` for conservative observe-mode policy drafting from verified audit exports.
+- Added audit review handoff documentation with export, verify, review, and discovery examples.
 
 ## In progress
 
@@ -22,4 +24,4 @@ Last updated: 2026-06-14 by copilot
 - Plain Go VCS stamping can fail in generated Copilot worktrees; use `-buildvcs=false` locally if needed.
 
 ## Next steps
-- Continue v1.4 governance UX with the policy discovery mode workflow.
+- Choose the next roadmap theme after v1.4 governance UX.

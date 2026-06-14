@@ -13,6 +13,8 @@
 - **Showcase flow GIF** — docs include a compact safe demo recording asset for portfolio use.
 - **Operational secrets runbook** — token storage and rotation guidance now lives in `docs/OPERATIONAL_SECRETS.md`.
 - **Approval source audit metadata** — audit rows and JSON Lines exports now include `approval_source` for policy, human, timeout, and heuristic decisions, and the dashboard can filter by source.
+- **Policy discovery workflow** — `mcpgate discover` converts verified observe-mode audit exports into conservative enforce-mode draft policies.
+- **Audit review handoff guide** — documented export, verify, review, and discovery examples for JSON Lines audit evidence.
 
 ### Changed
 - Constraint-evaluated `allow: "true"` path rules now fail closed when `arguments.path` is missing, instead of treating the path constraint as not applicable.

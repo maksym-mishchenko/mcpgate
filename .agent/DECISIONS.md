@@ -10,6 +10,11 @@
 **Rejected:** <alternatives and why not> (optional)
 
 -->
+## [2026-06-14] Policy discovery drafts are conservative  #auth
+**What:** `mcpgate discover` reads JSON Lines audit exports and generates an enforce-mode draft policy from warning-free `ALLOW` rows only, with `default: "false"` and placeholder server commands.
+**Why:** Observe-mode discovery should accelerate least-privilege authoring without converting potentially poisoned or unreviewed traffic into a ready-to-run allowlist.
+**Rejected:** Emitting a production-ready policy with inferred path/field constraints; audit rows do not contain enough context to infer those safely.
+
 ## [2026-06-14] Approval source is explicit audit metadata  #data
 **What:** Audit rows now carry `approval_source` for policy, human, timeout, and heuristic decisions, and exports include the same field when present.
 **Why:** Governance review needs to filter and verify manual UI decisions separately from automatic timeout denials and policy-only outcomes without parsing free-form reason strings.

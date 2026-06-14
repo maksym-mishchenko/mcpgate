@@ -7,19 +7,32 @@ mcpgate requires a high-entropy web token for the local dashboard and API. Treat
 Use one of these sources, in order of preference:
 
 1. A host secret manager or orchestrator secret store.
-2. A local keychain wrapper that exports `MCPGATE_TOKEN` only for the mcpgate process.
-3. An environment variable set in the operator's private shell session.
+2. A local token file referenced with `--token-file` or `MCPGATE_TOKEN_FILE`.
+3. A local keychain wrapper that exports `MCPGATE_TOKEN` only for the mcpgate process.
+4. An environment variable set in the operator's private shell session.
 
 Do not store real token values in policy YAML, README snippets, GitHub issues, agent instruction files, shell profiles committed to a repo, screenshots, or release artifacts.
 
 ## Generation
 
 ```bash
-export MCPGATE_TOKEN="$(openssl rand -hex 32)"
-mcpgate --config examples/simple-policy.yaml
+openssl rand -hex 32 > .mcpgate-token
+chmod 0600 .mcpgate-token
+mcpgate --config examples/simple-policy.yaml --token-file .mcpgate-token
 ```
 
 For repeatable local launches, load `MCPGATE_TOKEN` from your operating system's secret store and pass it only to the mcpgate process environment.
+
+## Audit signing key
+
+For tamper-evident operational logs, generate a 32-byte audit key and pass it at runtime:
+
+```bash
+mcpgate keygen audit.key
+mcpgate --config examples/simple-policy.yaml --token-file .mcpgate-token --audit-key audit.key
+```
+
+Keep `audit.key` outside the repository and rotate it if it is exposed. Exports verified with `mcpgate verify --key audit.key` require contiguous sequence numbers and a valid HMAC signature on every row except the bootstrap `seq=1` `GENESIS` row.
 
 ## Rotation workflow
 

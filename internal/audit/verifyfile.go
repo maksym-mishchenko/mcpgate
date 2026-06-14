@@ -36,6 +36,7 @@ func VerifyFile(r io.Reader, key []byte) (bool, error) {
 	scanner.Buffer(make([]byte, 256*1024), 256*1024)
 
 	prevHash := ""
+	var expectedSeq int64 = 1
 	lineNum := 0
 	for scanner.Scan() {
 		lineNum++
@@ -47,6 +48,13 @@ func VerifyFile(r io.Reader, key []byte) (bool, error) {
 		var row ExportedRow
 		if err := json.Unmarshal(line, &row); err != nil {
 			return false, fmt.Errorf("line %d: invalid JSON: %w", lineNum, err)
+		}
+		if row.Seq != expectedSeq {
+			return false, nil
+		}
+		isGenesis := row.Seq == 1 && row.Method == "GENESIS"
+		if row.Method == "GENESIS" && !isGenesis {
+			return false, nil
 		}
 
 		t, err := time.Parse(time.RFC3339, row.Ts)
@@ -80,18 +88,25 @@ func VerifyFile(r io.Reader, key []byte) (bool, error) {
 			return false, nil
 		}
 
-		// Verify HMAC when key provided; skip GENESIS rows (written before key).
-		if key != nil && row.Method != "GENESIS" && row.HMACsig != "" {
+		// Verify HMAC when key provided; only the bootstrap seq=1 GENESIS row is unsigned.
+		if key != nil && !isGenesis {
+			if row.HMACsig == "" {
+				return false, nil
+			}
 			input := strconv.FormatInt(row.Seq, 10) + ":" + string(entryBytes)
 			mac := hmac.New(sha256.New, key)
 			mac.Write([]byte(input))
-			expected := hex.EncodeToString(mac.Sum(nil))
-			if expected != row.HMACsig {
+			got, err := hex.DecodeString(row.HMACsig)
+			if err != nil {
+				return false, nil
+			}
+			if !hmac.Equal(mac.Sum(nil), got) {
 				return false, nil
 			}
 		}
 
 		prevHash = row.Hash
+		expectedSeq++
 	}
 	return scanner.Err() == nil, scanner.Err()
 }

@@ -1,6 +1,7 @@
 package policy_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -37,6 +38,14 @@ func ptrFloat(v float64) *float64 { return &v }
 
 func ptrBool(v bool) *bool { return &v }
 
+func rawArgs(values map[string]string) policy.Args {
+	args := make(policy.Args, len(values))
+	for k, v := range values {
+		args[k] = json.RawMessage(v)
+	}
+	return args
+}
+
 func TestVerdictMatrix(t *testing.T) {
 	cases := []struct {
 		server, method, name string
@@ -51,6 +60,7 @@ func TestVerdictMatrix(t *testing.T) {
 		{"other", "tools/call", "x", nil, policy.VerdictUnknown},
 		{"fs", "resources/read", "file:///etc/passwd", nil, policy.VerdictUnknown},
 	}
+
 	c := cfg()
 	for _, tc := range cases {
 		got := policy.Evaluate(tc.server, tc.method, tc.name, tc.args, c)
@@ -58,6 +68,49 @@ func TestVerdictMatrix(t *testing.T) {
 			t.Errorf("Evaluate(%q,%q,%q,%v) = %v, want %v",
 				tc.server, tc.method, tc.name, tc.args, got, tc.want)
 		}
+	}
+}
+
+func TestFieldConstraintsUseJSONTypes(t *testing.T) {
+	cfg := &policy.Config{
+		Version: 1,
+		Mode:    "enforce",
+		Default: policy.AllowFalse,
+		Servers: map[string]policy.ServerConfig{
+			"fs": {
+				Command: []string{"echo"},
+				Tools: map[string]policy.TargetRule{
+					"search": {
+						Allow: policy.AllowTrue,
+						Constraints: &policy.Constraints{
+							Fields: map[string]policy.FieldConstraint{
+								"mode":   {Equals: "exact"},
+								"limit":  {Min: ptrFloat(1), Max: ptrFloat(20)},
+								"hidden": {Bool: ptrBool(false)},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	got := policy.EvaluateArgs("fs", "tools/call", "search", rawArgs(map[string]string{
+		"mode":   `"exact"`,
+		"limit":  `10`,
+		"hidden": `false`,
+	}), cfg)
+	if got != policy.VerdictAllow {
+		t.Fatalf("EvaluateArgs with typed JSON = %v, want %v", got, policy.VerdictAllow)
+	}
+
+	got = policy.EvaluateArgs("fs", "tools/call", "search", rawArgs(map[string]string{
+		"mode":   `{"nested":"exact"}`,
+		"limit":  `10`,
+		"hidden": `false`,
+	}), cfg)
+	if got != policy.VerdictDeny {
+		t.Fatalf("object string constraint = %v, want %v", got, policy.VerdictDeny)
 	}
 }
 

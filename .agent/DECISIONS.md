@@ -10,6 +10,11 @@
 **Rejected:** <alternatives and why not> (optional)
 
 -->
+## [2026-06-14] v1.4.1 hardening fails closed at runtime boundaries  #auth #data #infra #ui
+**What:** Dashboard pending approvals now render untrusted request IDs with DOM APIs; runtime audit signing is opt-in via `--audit-key`; keyed export verification requires contiguous sequence numbers and signatures on every non-bootstrap row; HTTP and proxied server responses have bounded waits/body sizes; policy constraints evaluate raw JSON arguments.
+**Why:** The showcase must demonstrate zero-trust governance in both policy and operational boundaries: untrusted IDs must not become script, signed verification must not silently accept unsigned evidence, remote servers must not hang or exhaust the gateway, and JSON argument type changes must not bypass constraints.
+**Rejected:** Escaping-only dashboard fixes, accepting mixed signed/unsigned keyed exports, unbounded default HTTP behavior for compatibility, and replacing the existing `Evaluate` API instead of adding the typed `EvaluateArgs` path.
+
 ## [2026-06-14] Policy discovery drafts are conservative  #auth
 **What:** `mcpgate discover` reads JSON Lines audit exports and generates an enforce-mode draft policy from warning-free `ALLOW` rows only, with `default: "false"` and placeholder server commands.
 **Why:** Observe-mode discovery should accelerate least-privilege authoring without converting potentially poisoned or unreviewed traffic into a ready-to-run allowlist.

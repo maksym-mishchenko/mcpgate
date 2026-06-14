@@ -1,5 +1,5 @@
 # State — mcpgate
-Last updated: 2026-06-14 by copilot
+Last updated: 2026-06-15 by copilot
 
 ## Done
 - Synced README, DESIGN, SECURITY, and examples with current v1.1 behavior.
@@ -20,9 +20,10 @@ Last updated: 2026-06-14 by copilot
 - Prepared v1.4.0 release notes and roadmap baseline.
 
 ## In progress
+- v1.4.1 security/reliability hardening: dashboard XSS fix, runtime audit HMAC signing, strict keyed verification, HTTP/proxy bounds, and typed policy arguments.
 
 ## Known issues
 - Plain Go VCS stamping can fail in generated Copilot worktrees; use `-buildvcs=false` locally if needed.
 
 ## Next steps
-- Publish/tag v1.4.0 after release-prep PR merges, then choose the next roadmap theme.
+- Finish v1.4.1 hardening PR for issue #17.

@@ -8,6 +8,15 @@ This roadmap tracks the next practical work for mcpgate after v1.4.0. GitHub iss
 - Core security invariants are implemented: deny-by-default policy, write-ahead SQLite audit, fail-closed forwarding, HMAC-verifiable audit exports, interactive approval, reverse-channel gating, deterministic heuristic warnings, deterministic configured-server selection, structured constraints, symlink-aware path checks, approval-source audit metadata, and conservative audit-based policy discovery.
 - Local worktree note: Go commands in this Copilot worktree may need `-buildvcs=false` because VCS stamping can fail in the generated worktree path.
 
+## v1.4.1 — Security and reliability hardening
+
+| Priority | Item | Outcome |
+|---|---|---|
+| In progress | Dashboard approval XSS fix | Pending-call IDs are treated as data, not inline JavaScript |
+| In progress | Runtime audit HMAC signing | Normal gateway runs can produce signed audit rows and keyed verification requires signatures |
+| In progress | Transport and server response bounds | Remote MCP calls cannot hang forever or return unbounded response bodies |
+| In progress | Typed policy arguments | Structured constraints evaluate JSON values without string-flattening surprises |
+
 ## v1.2.0 — Documentation and operator hardening
 
 | Priority | Item | Outcome |

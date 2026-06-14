@@ -79,15 +79,23 @@ func main() {
 
 	configPath := flag.String("config", "mcpgate.yaml", "path to policy config")
 	token := flag.String("token", os.Getenv("MCPGATE_TOKEN"), "bearer token for web UI")
+	tokenFile := flag.String("token-file", os.Getenv("MCPGATE_TOKEN_FILE"), "file containing bearer token for web UI")
+	auditKey := flag.String("audit-key", os.Getenv("MCPGATE_AUDIT_KEY_FILE"), "32-byte HMAC key file for signing audit rows")
 	addr := flag.String("addr", "127.0.0.1:18789", "web server listen address")
 	approvalTimeout := flag.Duration("approval-timeout", 30*time.Second, "how long to wait for human approval before auto-deny")
+	serverTimeout := flag.Duration("server-timeout", 60*time.Second, "how long to wait for MCP server responses before failing closed")
 	serverName := flag.String("server", "", "server name from policy config to run (required when config has multiple servers)")
 	flag.Parse()
 
 	serverArgs := flag.Args()
 
-	if *token == "" {
-		slog.Error("no token: set --token or MCPGATE_TOKEN env var")
+	webToken, err := loadOptionalSecret(*token, *tokenFile, "token")
+	if err != nil {
+		slog.Error("failed to load token", "err", err)
+		os.Exit(1)
+	}
+	if webToken == "" {
+		slog.Error("no token: set --token, --token-file, MCPGATE_TOKEN, or MCPGATE_TOKEN_FILE")
 		os.Exit(1)
 	}
 
@@ -108,7 +116,7 @@ func main() {
 	}
 
 	// Open audit store.
-	store, err := audit.Open("mcpgate.db")
+	store, err := openAuditStore("mcpgate.db", *auditKey)
 	if err != nil {
 		slog.Error("failed to open audit store", "err", err)
 		os.Exit(1)
@@ -168,7 +176,7 @@ func main() {
 		querier = q
 	}
 	webSrv := web.New(web.Config{
-		Token:        *token,
+		Token:        webToken,
 		Coordinator:  coord,
 		AuditQuerier: querier,
 	})
@@ -178,7 +186,7 @@ func main() {
 	}
 	go func() {
 		slog.Info("web server starting", "addr", *addr, "version", version)
-		fmt.Fprintf(os.Stderr, "\n  Open: http://%s/?token=%s\n\n", *addr, *token)
+		fmt.Fprintf(os.Stderr, "\n  Open: http://%s/?token=%s\n\n", *addr, webToken)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("web server error", "err", err)
 		}
@@ -197,6 +205,7 @@ func main() {
 		ServerName:      primaryName,
 		Notifier:        webSrv,
 		ApprovalTimeout: *approvalTimeout,
+		ServerTimeout:   *serverTimeout,
 	})
 
 	// Watch for primary child exit — drain pending approvals and cancel context.
@@ -220,6 +229,31 @@ func main() {
 	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutCancel()
 	httpServer.Shutdown(shutCtx) //nolint:errcheck
+}
+
+func loadOptionalSecret(value, filePath, name string) (string, error) {
+	if value != "" && filePath != "" {
+		return "", fmt.Errorf("set either --%s or --%s-file, not both", name, name)
+	}
+	if filePath == "" {
+		return value, nil
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("read %s file: %w", name, err)
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+func openAuditStore(path, keyPath string) (*audit.SQLiteStore, error) {
+	if keyPath == "" {
+		return audit.Open(path)
+	}
+	key, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("read audit key file: %w", err)
+	}
+	return audit.OpenWithHMAC(path, key)
 }
 
 func selectConfiguredServer(servers map[string]policy.ServerConfig, requested string) (string, policy.ServerConfig, error) {

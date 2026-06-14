@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+- **Runtime audit signing** — `--audit-key` / `MCPGATE_AUDIT_KEY_FILE` signs normal gateway audit rows with the existing HMAC chain support.
+- **File-backed dashboard tokens** — `--token-file` / `MCPGATE_TOKEN_FILE` lets operators avoid passing dashboard tokens on the command line.
+- **Server response bounds** — HTTP transports use default timeouts and response body limits, and `--server-timeout` bounds gateway waits for MCP server responses.
+
+### Changed
+- Keyed audit verification now fails closed when any non-bootstrap row lacks a valid HMAC signature, sequence numbers are not contiguous, or a non-bootstrap row claims to be `GENESIS`.
+- Policy constraint evaluation now preserves JSON argument types internally instead of flattening values with `fmt.Sprintf`.
+
+### Fixed
+- Removed inline pending-approval event handlers from the dashboard to prevent JSON-RPC request IDs from becoming executable JavaScript.
+
 ## [1.4.0] - 2026-06-14 — "Govern the gateway"
 
 ### Added

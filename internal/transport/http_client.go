@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/maksym-mishchenko/mcpgate/internal/jsonrpc"
 )
@@ -19,17 +20,24 @@ import (
 type HTTPTransport struct {
 	endpoint   string
 	httpClient *http.Client
+	maxBytes   int64
 
 	mu      sync.Mutex
 	pending *bytes.Buffer // response body from last Send
 }
+
+const (
+	DefaultHTTPTimeout      = 60 * time.Second
+	DefaultMaxResponseBytes = 16 << 20
+)
 
 // NewHTTP creates an HTTPTransport pointing at endpoint.
 // endpoint is a full URL, e.g. "http://localhost:8080/mcp".
 func NewHTTP(endpoint string) *HTTPTransport {
 	return &HTTPTransport{
 		endpoint:   endpoint,
-		httpClient: &http.Client{},
+		httpClient: &http.Client{Timeout: DefaultHTTPTimeout},
+		maxBytes:   DefaultMaxResponseBytes,
 	}
 }
 
@@ -39,6 +47,22 @@ func NewHTTPWithClient(endpoint string, client *http.Client) *HTTPTransport {
 	return &HTTPTransport{
 		endpoint:   endpoint,
 		httpClient: client,
+		maxBytes:   DefaultMaxResponseBytes,
+	}
+}
+
+// NewHTTPWithLimits creates an HTTPTransport with explicit timeout and body limit.
+func NewHTTPWithLimits(endpoint string, timeout time.Duration, maxBytes int64) *HTTPTransport {
+	if timeout <= 0 {
+		timeout = DefaultHTTPTimeout
+	}
+	if maxBytes <= 0 {
+		maxBytes = DefaultMaxResponseBytes
+	}
+	return &HTTPTransport{
+		endpoint:   endpoint,
+		httpClient: &http.Client{Timeout: timeout},
+		maxBytes:   maxBytes,
 	}
 }
 
@@ -64,6 +88,7 @@ func NewHTTPWithEgress(endpoint string, allowedHosts []string) *HTTPTransport {
 	}
 
 	httpClient := &http.Client{
+		Timeout: DefaultHTTPTimeout,
 		Transport: &http.Transport{
 			DialContext: dialCtx,
 		},
@@ -96,9 +121,13 @@ func (t *HTTPTransport) Send(ctx context.Context, m jsonrpc.Message) error {
 		return fmt.Errorf("http transport: server returned %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	limited := io.LimitReader(resp.Body, t.maxBytes+1)
+	data, err := io.ReadAll(limited)
 	if err != nil {
 		return fmt.Errorf("http transport: read body: %w", err)
+	}
+	if int64(len(data)) > t.maxBytes {
+		return fmt.Errorf("http transport: response body exceeds %d bytes", t.maxBytes)
 	}
 
 	t.mu.Lock()

@@ -1,5 +1,7 @@
 package policy
 
+import "encoding/json"
+
 // Allow values for a rule.
 type Allow string
 
@@ -84,4 +86,20 @@ type FieldConstraint struct {
 	Min     *float64 `yaml:"min,omitempty"`
 	Max     *float64 `yaml:"max,omitempty"`
 	Bool    *bool    `yaml:"bool,omitempty"`
+}
+
+// Args preserves tool argument JSON values for type-aware constraint checks.
+type Args map[string]json.RawMessage
+
+// ArgsFromStrings converts legacy string arguments into JSON string values.
+func ArgsFromStrings(values map[string]string) Args {
+	if values == nil {
+		return nil
+	}
+	args := make(Args, len(values))
+	for k, v := range values {
+		b, _ := json.Marshal(v)
+		args[k] = b
+	}
+	return args
 }

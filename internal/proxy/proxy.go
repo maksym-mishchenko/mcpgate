@@ -32,6 +32,9 @@ type Config struct {
 	// ApprovalTimeout is how long to wait for human approval before auto-deny.
 	// Defaults to 30s if zero.
 	ApprovalTimeout time.Duration
+	// ServerTimeout is how long to wait for a server response before failing closed.
+	// Defaults to no additional timeout when zero.
+	ServerTimeout time.Duration
 }
 
 // Proxy is the core engine: reads from the agent, enforces policy, and
@@ -56,6 +59,7 @@ func (p *Proxy) Run(ctx context.Context) {
 			}
 			resp, err := p.recvServerResponse(ctx)
 			if err != nil {
+				p.sendError(ctx, msg, "server response unavailable")
 				return
 			}
 			p.cfg.AgentTransport.Send(ctx, resp) //nolint:errcheck
@@ -67,9 +71,10 @@ func (p *Proxy) Run(ctx context.Context) {
 
 func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 	name := extractName(msg)
-	args := extractArgs(msg)
+	rawArgs := extractRawArgs(msg)
+	args := displayArgs(rawArgs)
 
-	verdict := policy.Evaluate(p.cfg.ServerName, msg.Method, name, args, p.cfg.PolicyConfig)
+	verdict := policy.EvaluateArgs(p.cfg.ServerName, msg.Method, name, rawArgs, p.cfg.PolicyConfig)
 	reason := "policy"
 	approvalSource := "policy"
 
@@ -175,10 +180,12 @@ func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 	switch verdict {
 	case policy.VerdictAllow:
 		if err := p.cfg.ServerTransport.Send(ctx, msg); err != nil {
+			p.sendError(ctx, msg, "server response unavailable")
 			return
 		}
 		resp, err := p.recvServerResponse(ctx)
 		if err != nil {
+			p.sendError(ctx, msg, "server response unavailable")
 			return
 		}
 		if p.heuristicsEnabled() {
@@ -240,6 +247,11 @@ func (p *Proxy) sendError(ctx context.Context, req jsonrpc.Message, message stri
 // progress updates) to the agent. It returns once the server sends an
 // actual response (a frame that is neither a request nor a notification).
 func (p *Proxy) recvServerResponse(ctx context.Context) (jsonrpc.Message, error) {
+	if p.cfg.ServerTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, p.cfg.ServerTimeout)
+		defer cancel()
+	}
 	for {
 		msg, err := p.cfg.ServerTransport.Recv(ctx)
 		if err != nil {
@@ -271,7 +283,7 @@ func (p *Proxy) recvServerResponse(ctx context.Context) (jsonrpc.Message, error)
 // agent's reply back to the server. On DENY it sends a JSON-RPC error to the
 // server. Every decision is audited.
 func (p *Proxy) handleServerRequest(ctx context.Context, msg jsonrpc.Message) error {
-	verdict := policy.Evaluate(p.cfg.ServerName, msg.Method, "", nil, p.cfg.PolicyConfig)
+	verdict := policy.EvaluateArgs(p.cfg.ServerName, msg.Method, "", nil, p.cfg.PolicyConfig)
 	reason := "policy"
 	approvalSource := "policy"
 
@@ -350,14 +362,23 @@ func extractName(msg jsonrpc.Message) string {
 	return params.Name
 }
 
-func extractArgs(msg jsonrpc.Message) map[string]string {
+func extractRawArgs(msg jsonrpc.Message) policy.Args {
 	var params struct {
-		Arguments map[string]any `json:"arguments"`
+		Arguments map[string]json.RawMessage `json:"arguments"`
 	}
 	json.Unmarshal(msg.Params, &params) //nolint:errcheck
-	result := make(map[string]string, len(params.Arguments))
-	for k, v := range params.Arguments {
-		result[k] = fmt.Sprintf("%v", v)
+	return policy.Args(params.Arguments)
+}
+
+func displayArgs(args policy.Args) map[string]string {
+	result := make(map[string]string, len(args))
+	for k, raw := range args {
+		var s string
+		if err := json.Unmarshal(raw, &s); err == nil {
+			result[k] = s
+			continue
+		}
+		result[k] = string(raw)
 	}
 	return result
 }

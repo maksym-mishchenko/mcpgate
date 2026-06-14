@@ -41,11 +41,12 @@ for known prompt-injection and tool-poisoning patterns.
 
 ### Token authentication
 
-Every web API endpoint (`/health`, `/approve`, `/pending`, `/audit`, `/events`) requires a `Bearer` token. The token is set via `--token` flag or the `MCPGATE_TOKEN` environment variable.
+Every web API endpoint (`/health`, `/approve`, `/pending`, `/audit`, `/events`) requires a `Bearer` token. The token is set via `--token`, `--token-file`, `MCPGATE_TOKEN`, or `MCPGATE_TOKEN_FILE`.
 
 - There is no unauthenticated guest mode.
 - Tokens are hashed with SHA-256 and compared with constant-time comparison.
 - Recommendation: generate with `openssl rand -hex 32`.
+- Prefer `--token-file` or `MCPGATE_TOKEN_FILE` for repeatable launches so the token is not present in command-line arguments.
 - Do not commit operational tokens, dashboard API tokens, or `MCPGATE_TOKEN` values to repositories or shared instruction files. Store them in a secret manager or environment-specific secret store and rotate any value that has been exposed outside that boundary.
 
 ### Anti-DNS-rebinding (Host header check)
@@ -64,7 +65,7 @@ Approval-sensitive audit rows include an `approval_source` value (`policy`, `hum
 
 The audit store interface (`audit.AuditStore`) is injected, making it possible to test fail-closed behaviour with a failing stub — the test suite does this.
 
-For retention and rotation, export and verify audit chains before archival. Do not delete rows in place; see `docs/AUDIT_RETENTION.md`.
+Use `--audit-key` or `MCPGATE_AUDIT_KEY_FILE` to sign runtime audit rows with a 32-byte HMAC key. Keyed verification requires contiguous sequence numbers and a valid signature on every row except the bootstrap `seq=1` `GENESIS` row; unsigned rows fail keyed verification. For retention and rotation, export and verify audit chains before archival. Do not delete rows in place; see `docs/AUDIT_RETENTION.md`.
 
 ### Process isolation (Setpgid)
 
@@ -81,8 +82,10 @@ When mcpgate shuts down (or the context is cancelled), it sends `SIGTERM` to the
 - **Constraint coverage:** For constraint-evaluated `allow: "true"` rules, missing constrained fields deny the call. For path-constrained allow rules, a missing `arguments.path` denies instead of falling back to the rule's allow value. `ask` rules do not evaluate constraints; approvers must inspect proposed paths manually.
 - **TOCTOU boundary:** Path validation occurs at policy-check time, before the child MCP server performs filesystem I/O. Use MCP server root restrictions, read-only mounts, containers, or OS-level permissions when race-free filesystem confinement matters.
 - **Structured argument constraints:** `constraints.fields` can enforce exact values, enums, anchored regexes, numeric ranges, and booleans for non-path arguments. Missing or malformed constrained arguments deny the call.
+- **Typed JSON arguments:** Constraint evaluation preserves JSON types internally. String constraints require JSON strings, numeric constraints accept JSON numbers or numeric strings, and boolean constraints accept JSON booleans or boolean strings.
 - **Observe mode:** Setting `mode: observe` bypasses enforcement and allows all calls through. This mode is intended for discovery, not production use. Do not use `observe` mode in any environment where the MCP server has access to sensitive resources.
 - **One active server per process:** Each mcpgate process fronts one selected server. Run one process per MCP client server entry instead of adding an in-process routing layer that could blur audit attribution.
+- **Bounded remote transport:** HTTP MCP calls use a default timeout and response body limit, and `--server-timeout` bounds gateway waits for server responses.
 
 ---
 

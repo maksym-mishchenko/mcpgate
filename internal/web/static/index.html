@@ -144,19 +144,41 @@ function renderPending() {
     div.className = 'card';
     div.id = 'card-' + CSS.escape(key);
     const argsStr = c.args && Object.keys(c.args).length ? JSON.stringify(c.args, null, 2) : '{}';
-    div.innerHTML = `
-      <div class="card-header">
-        <span class="card-method">${esc(c.method)}</span>
-        <span class="card-name">${esc(c.name)}</span>
-        <span class="card-server">${esc(c.server)}</span>
-      </div>
-      <pre class="card-args">${esc(argsStr)}</pre>
-      <div class="card-actions">
-        <button class="btn btn-allow" onclick="decide('${esc(key)}','allow')">Allow</button>
-        <button class="btn btn-deny"  onclick="decide('${esc(key)}','deny')">Deny</button>
-      </div>`;
+    const header = document.createElement('div');
+    header.className = 'card-header';
+    header.appendChild(textSpan('card-method', c.method));
+    header.appendChild(textSpan('card-name', c.name));
+    header.appendChild(textSpan('card-server', c.server));
+
+    const pre = document.createElement('pre');
+    pre.className = 'card-args';
+    pre.textContent = argsStr;
+
+    const actions = document.createElement('div');
+    actions.className = 'card-actions';
+    const allow = document.createElement('button');
+    allow.className = 'btn btn-allow';
+    allow.textContent = 'Allow';
+    allow.addEventListener('click', () => decide(key, 'allow'));
+    const deny = document.createElement('button');
+    deny.className = 'btn btn-deny';
+    deny.textContent = 'Deny';
+    deny.addEventListener('click', () => decide(key, 'deny'));
+    actions.appendChild(allow);
+    actions.appendChild(deny);
+
+    div.appendChild(header);
+    div.appendChild(pre);
+    div.appendChild(actions);
     container.appendChild(div);
   });
+}
+
+function textSpan(className, value) {
+  const span = document.createElement('span');
+  span.className = className;
+  span.textContent = value || '';
+  return span;
 }
 
 async function decide(key, verdict) {

@@ -1,6 +1,8 @@
 package policy
 
 import (
+	"bytes"
+	"encoding/json"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -30,9 +32,14 @@ func (v Verdict) String() string {
 }
 
 // Evaluate is a pure function: given a server name, gated method, call name,
-// argument map, and config, it returns a Verdict.
+// string argument map, and config, it returns a Verdict.
 // args is used only for argument-level constraint checking.
 func Evaluate(server, method, name string, args map[string]string, cfg *Config) Verdict {
+	return EvaluateArgs(server, method, name, ArgsFromStrings(args), cfg)
+}
+
+// EvaluateArgs preserves raw JSON argument types for constraint checking.
+func EvaluateArgs(server, method, name string, args Args, cfg *Config) Verdict {
 	if cfg.Mode == "observe" {
 		return VerdictAllow
 	}
@@ -70,7 +77,7 @@ func Evaluate(server, method, name string, args map[string]string, cfg *Config) 
 	}
 }
 
-func applyRule(allow Allow, c *Constraints, args map[string]string) Verdict {
+func applyRule(allow Allow, c *Constraints, args Args) Verdict {
 	switch allow {
 	case AllowFalse:
 		return VerdictDeny
@@ -112,9 +119,13 @@ func defaultVerdict(d Allow) Verdict {
 	}
 }
 
-func checkConstraints(c *Constraints, args map[string]string) Verdict {
+func checkConstraints(c *Constraints, args Args) Verdict {
 	if c.Path != nil {
-		pathVal, ok := args["path"]
+		raw, ok := args["path"]
+		if !ok {
+			return VerdictDeny
+		}
+		pathVal, ok := stringArg(raw)
 		if !ok {
 			return VerdictDeny
 		}
@@ -123,11 +134,11 @@ func checkConstraints(c *Constraints, args map[string]string) Verdict {
 		}
 	}
 	for field, constraint := range c.Fields {
-		val, ok := args[field]
+		raw, ok := args[field]
 		if !ok {
 			return VerdictDeny
 		}
-		if !checkFieldConstraint(constraint, val) {
+		if !checkFieldConstraint(constraint, raw) {
 			return VerdictDeny
 		}
 	}
@@ -168,11 +179,18 @@ func checkPathConstraint(pc *PathConstraint, val string) Verdict {
 	return VerdictAllow
 }
 
-func checkFieldConstraint(c FieldConstraint, val string) bool {
-	if c.Equals != "" && val != c.Equals {
-		return false
+func checkFieldConstraint(c FieldConstraint, raw json.RawMessage) bool {
+	if c.Equals != "" {
+		val, ok := stringArg(raw)
+		if !ok || val != c.Equals {
+			return false
+		}
 	}
 	if len(c.OneOf) > 0 {
+		val, ok := stringArg(raw)
+		if !ok {
+			return false
+		}
 		found := false
 		for _, allowed := range c.OneOf {
 			if val == allowed {
@@ -184,12 +202,15 @@ func checkFieldConstraint(c FieldConstraint, val string) bool {
 			return false
 		}
 	}
-	if c.Matches != "" && !matchesAnchored(c.Matches, val) {
-		return false
+	if c.Matches != "" {
+		val, ok := stringArg(raw)
+		if !ok || !matchesAnchored(c.Matches, val) {
+			return false
+		}
 	}
 	if c.Min != nil || c.Max != nil {
-		n, err := strconv.ParseFloat(val, 64)
-		if err != nil {
+		n, ok := numberArg(raw)
+		if !ok {
 			return false
 		}
 		if c.Min != nil && n < *c.Min {
@@ -200,8 +221,8 @@ func checkFieldConstraint(c FieldConstraint, val string) bool {
 		}
 	}
 	if c.Bool != nil {
-		b, err := strconv.ParseBool(val)
-		if err != nil {
+		b, ok := boolArg(raw)
+		if !ok {
 			return false
 		}
 		if b != *c.Bool {
@@ -209,6 +230,43 @@ func checkFieldConstraint(c FieldConstraint, val string) bool {
 		}
 	}
 	return true
+}
+
+func stringArg(raw json.RawMessage) (string, bool) {
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return "", false
+	}
+	return s, true
+}
+
+func numberArg(raw json.RawMessage) (float64, bool) {
+	var n json.Number
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(&n); err == nil {
+		f, err := strconv.ParseFloat(n.String(), 64)
+		return f, err == nil
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	return f, err == nil
+}
+
+func boolArg(raw json.RawMessage) (bool, bool) {
+	var b bool
+	if err := json.Unmarshal(raw, &b); err == nil {
+		return b, true
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return false, false
+	}
+	parsed, err := strconv.ParseBool(s)
+	return parsed, err == nil
 }
 
 // pathWithin returns true only if val is a clean, absolute path that is

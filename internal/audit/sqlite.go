@@ -215,12 +215,20 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 	defer rows.Close()
 
 	prevHash := ""
+	var expectedSeq int64 = 1
 	for rows.Next() {
 		var seq, ts int64
 		var method, server, name, args, verdict, reason, storedHash, storedHMACsig, warnings, approvalSource string
 		if err := rows.Scan(&seq, &method, &server, &name, &args,
 			&verdict, &reason, &ts, &storedHash, &storedHMACsig, &warnings, &approvalSource); err != nil {
 			return false, err
+		}
+		if seq != expectedSeq {
+			return false, nil
+		}
+		isGenesis := seq == 1 && method == "GENESIS"
+		if method == "GENESIS" && !isGenesis {
+			return false, nil
 		}
 		fields := map[string]any{
 			"method": method, "server": server, "name": name,
@@ -240,8 +248,8 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 		if computed != storedHash {
 			return false, nil
 		}
-		// Skip HMAC verification for GENESIS row (bootstrap record before key config)
-		if s.hmacKey != nil && method != "GENESIS" {
+		// Skip HMAC verification only for the bootstrap GENESIS row.
+		if s.hmacKey != nil && !isGenesis {
 			input := strconv.FormatInt(seq, 10) + ":" + string(entryBytes)
 			mac := hmac.New(sha256.New, s.hmacKey)
 			mac.Write([]byte(input))
@@ -251,6 +259,7 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 			}
 		}
 		prevHash = storedHash
+		expectedSeq++
 	}
 	return true, rows.Err()
 }

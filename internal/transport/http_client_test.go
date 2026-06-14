@@ -3,11 +3,13 @@ package transport_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/maksym-mishchenko/mcpgate/internal/jsonrpc"
 	"github.com/maksym-mishchenko/mcpgate/internal/transport"
@@ -21,6 +23,7 @@ func TestHTTPTransportRoundtrip(t *testing.T) {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
+
 		result, _ := json.Marshal(map[string]string{"status": "ok"})
 		resp := jsonrpc.Message{
 			JSONRPC: "2.0",
@@ -58,6 +61,39 @@ func TestHTTPTransportRoundtrip(t *testing.T) {
 	}
 	if resp.Result == nil {
 		t.Error("expected result, got nil")
+	}
+}
+
+func TestHTTPTransportResponseBodyLimit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":"too large"}`)) //nolint:errcheck
+	}))
+	defer srv.Close()
+
+	tr := transport.NewHTTPWithLimits(srv.URL, time.Second, 8)
+	id, _ := json.Marshal(1)
+	err := tr.Send(context.Background(), jsonrpc.Message{JSONRPC: "2.0", ID: id, Method: "tools/call"})
+	if err == nil || !strings.Contains(err.Error(), "response body exceeds") {
+		t.Fatalf("Send error = %v, want response body limit error", err)
+	}
+}
+
+func TestHTTPTransportTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	tr := transport.NewHTTPWithLimits(srv.URL, 10*time.Millisecond, 1024)
+	id, _ := json.Marshal(1)
+	err := tr.Send(context.Background(), jsonrpc.Message{JSONRPC: "2.0", ID: id, Method: "tools/call"})
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) && !strings.Contains(err.Error(), "Client.Timeout") {
+		t.Fatalf("Send error = %v, want timeout", err)
 	}
 }
 

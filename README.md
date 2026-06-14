@@ -104,10 +104,10 @@ heuristics:
 
 ```bash
 # Set a high-entropy token for the web API (required)
-export MCPGATE_TOKEN="$(openssl rand -hex 32)"
+openssl rand -hex 32 > .mcpgate-token
 
 # Run — with a single configured server, mcpgate starts its command from the policy
-mcpgate --config mcpgate.yaml
+mcpgate --config mcpgate.yaml --token-file .mcpgate-token
 ```
 
 Configure your AI client to use mcpgate's stdio instead of the MCP server directly. For example in Claude Desktop's `mcp.json`:
@@ -117,8 +117,7 @@ Configure your AI client to use mcpgate's stdio instead of the MCP server direct
   "mcpServers": {
     "filesystem": {
       "command": "mcpgate",
-      "args": ["--config", "/path/to/mcpgate.yaml"],
-      "env": { "MCPGATE_TOKEN": "<generate-a-random-token>" }
+      "args": ["--config", "/path/to/mcpgate.yaml", "--token-file", "/path/to/.mcpgate-token"]
     }
   }
 }
@@ -192,9 +191,9 @@ heuristics:
 | `path.within` | `arguments.path` | String-level absolute path containment check; no symlink resolution; useful for planned writes or new paths |
 | `path.resolve_within` | `arguments.path` | Opt-in `EvalSymlinks` containment check for existing paths; fails closed if the path or root cannot be resolved |
 | `path.equals` / `path.one_of` / `path.matches` | `arguments.path` | Exact, enum, or anchored RE2 checks |
-| `fields.<name>.equals` / `one_of` / `matches` | any string argument | Exact, enum, or anchored RE2 checks |
-| `fields.<name>.min` / `max` | numeric argument | Parses the argument as a float and denies on parse/range failure |
-| `fields.<name>.bool` | boolean argument | Parses the argument as a bool and denies on mismatch |
+| `fields.<name>.equals` / `one_of` / `matches` | JSON string argument | Exact, enum, or anchored RE2 checks |
+| `fields.<name>.min` / `max` | JSON number or numeric string argument | Denies on parse/range failure |
+| `fields.<name>.bool` | JSON boolean or boolean string argument | Denies on mismatch |
 
 For constraint-evaluated `allow: "true"` rules, missing constrained fields deny the call. Invalid regexes, unparseable numbers, unparseable booleans, unresolved symlinks, and missing `path` values for path-constrained allow rules fail closed. `ask` prompts do not evaluate constraints; approvers must inspect proposed paths manually.
 
@@ -212,8 +211,11 @@ mcpgate [flags] [-- <server-command> [server-args...]]
 |------|---------|-------------|
 | `--config` | `mcpgate.yaml` | Path to policy YAML file |
 | `--token` | `$MCPGATE_TOKEN` | Bearer token for web API authentication |
+| `--token-file` | `$MCPGATE_TOKEN_FILE` | File containing the web API bearer token; preferred over command-line token values |
+| `--audit-key` | `$MCPGATE_AUDIT_KEY_FILE` | 32-byte HMAC key file for signing runtime audit rows |
 | `--addr` | `127.0.0.1:18789` | Web server listen address |
 | `--approval-timeout` | `30s` | How long an `ask` call waits before auto-deny |
+| `--server-timeout` | `60s` | How long mcpgate waits for MCP server responses before failing closed |
 | `--server` | `""` | Server name from policy config to run; required when config has multiple servers |
 
 If the policy config defines one server, mcpgate starts that server's `command` or `url`. If it defines multiple servers, pass `--server <name>` to choose one deterministically. The double-dash `--` separator is only needed for the fallback mode where the server command is supplied on the CLI instead of in policy config.
@@ -228,7 +230,7 @@ mcpgate verify --file audit-review.jsonl
 mcpgate discover --file audit-review.jsonl --out draft-policy.yaml
 ```
 
-`discover` converts a verified observe-mode audit export into a conservative `mode: enforce` draft policy. It includes only warning-free `ALLOW` rows, keeps `default: "false"`, and uses placeholder server commands so operators must review transport settings and add path/field constraints before use. See [`docs/AUDIT_REVIEW.md`](docs/AUDIT_REVIEW.md).
+Use `mcpgate keygen audit.key` and run with `--audit-key audit.key` to sign runtime audit rows. Keyed verification requires contiguous sequence numbers and a valid HMAC signature on every row except the bootstrap `seq=1` `GENESIS` row. `discover` converts a verified observe-mode audit export into a conservative `mode: enforce` draft policy. It includes only warning-free `ALLOW` rows, keeps `default: "false"`, and uses placeholder server commands so operators must review transport settings and add path/field constraints before use. See [`docs/AUDIT_REVIEW.md`](docs/AUDIT_REVIEW.md).
 
 ---
 

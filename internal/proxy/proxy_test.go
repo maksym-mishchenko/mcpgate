@@ -11,6 +11,7 @@ import (
 
 	"github.com/maksym-mishchenko/mcpgate/internal/approval"
 	"github.com/maksym-mishchenko/mcpgate/internal/audit"
+	"github.com/maksym-mishchenko/mcpgate/internal/jsonrpc"
 	"github.com/maksym-mishchenko/mcpgate/internal/policy"
 	"github.com/maksym-mishchenko/mcpgate/internal/proxy"
 	"github.com/maksym-mishchenko/mcpgate/internal/transport"
@@ -29,6 +30,18 @@ type fakeFailAudit struct{}
 func (f *fakeFailAudit) Append(_ audit.Entry) error { return fmt.Errorf("disk full") }
 func (f *fakeFailAudit) VerifyChain() (bool, error) { return true, nil }
 func (f *fakeFailAudit) Close() error               { return nil }
+
+type failingSendTransport struct{}
+
+func (f failingSendTransport) Recv(context.Context) (jsonrpc.Message, error) {
+	return jsonrpc.Message{}, fmt.Errorf("unexpected recv")
+}
+
+func (f failingSendTransport) Send(context.Context, jsonrpc.Message) error {
+	return fmt.Errorf("send failed")
+}
+
+func (f failingSendTransport) Close() error { return nil }
 
 func makeCfg(mode string) *policy.Config {
 	return &policy.Config{
@@ -97,6 +110,58 @@ func TestAllowedCallForwarded(t *testing.T) {
 	if !bytes.Contains(agentOut.Bytes(), []byte("hello")) {
 		t.Errorf("agent output missing server response content; got: %s", agentOut.Bytes())
 	}
+}
+
+func TestAllowedCallSendsErrorWhenServerResponseUnavailable(t *testing.T) {
+	agentMsg := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{}}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(agentMsg), &agentOut)
+	serverIn := transport.NewStdio(strings.NewReader(""), &bytes.Buffer{})
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    makeCfg("enforce"),
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+		ServerTimeout:   50 * time.Millisecond,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	assertJSONRPCError(t, agentOut.Bytes(), -32001)
+}
+
+func TestAllowedCallSendsErrorWhenServerSendFails(t *testing.T) {
+	agentMsg := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{}}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(agentMsg), &agentOut)
+
+	fa := &fakeAudit{}
+	coord := approval.New()
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: failingSendTransport{},
+		PolicyConfig:    makeCfg("enforce"),
+		Coordinator:     coord,
+		AuditStore:      fa,
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	assertJSONRPCError(t, agentOut.Bytes(), -32001)
 }
 
 func TestDeniedCallNotForwarded(t *testing.T) {

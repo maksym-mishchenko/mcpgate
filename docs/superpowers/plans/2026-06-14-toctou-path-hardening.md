@@ -31,7 +31,7 @@
 - Modify: `.agent/STATE.md`
   - Owns agent memory state. Record the completed implementation.
 - Modify: `.agent/DECISIONS.md`
-  - Owns non-trivial project decisions. Add a short entry for missing path fail-closed behavior.
+  - Owns non-trivial project decisions. Add a short entry for missing path fail-closed behavior on constraint-evaluated allow rules.
 
 ---
 
@@ -50,7 +50,7 @@ func TestPathConstraintMissingPathDenies(t *testing.T) {
 	c := cfg()
 	got := policy.Evaluate("fs", "tools/call", "read_file", map[string]string{}, c)
 	if got != policy.VerdictDeny {
-		t.Errorf("missing path under path constraint: got %v, want deny", got)
+		t.Errorf("missing path under allow path constraint: got %v, want deny", got)
 	}
 }
 
@@ -81,7 +81,7 @@ Run:
 go test -buildvcs=false ./internal/policy -run TestPathConstraintMissingPathDenies -count=1
 ```
 
-Expected: FAIL with output showing `missing path under path constraint: got ALLOW, want deny`.
+Expected: FAIL with output showing `missing path under allow path constraint: got ALLOW, want deny`.
 
 - [ ] **Step 3: Run the new path-format tests and verify the existing behavior is already protected**
 

@@ -13,6 +13,8 @@ The fastest way to understand mcpgate is the showcase flow in [`docs/SHOWCASE.md
 3. A dangerous delete is denied by policy before it reaches the MCP server.
 4. Prompt-injection or exfiltration text is flagged in the signed audit trail and can be blocked with `heuristics.block_on_warn`.
 
+![mcpgate showcase flow showing allow, ask, deny, warning, and audit verify steps](docs/assets/showcase-flow.gif)
+
 ![mcpgate dashboard showing pending approvals, audit filters, and warning details](docs/assets/showcase-dashboard.png)
 
 ## Highlights
@@ -23,6 +25,7 @@ The fastest way to understand mcpgate is the showcase flow in [`docs/SHOWCASE.md
 - HMAC-verifiable audit chain export for incident review.
 - Deterministic prompt-injection/tool-poisoning scanner with optional block-on-warn mode.
 - Stdio and HTTP server transports with optional HTTP egress allowlisting.
+- One active selected MCP server per gateway process for explicit client routing and audit attribution.
 
 ---
 
@@ -214,11 +217,15 @@ mcpgate [flags] [-- <server-command> [server-args...]]
 
 If the policy config defines one server, mcpgate starts that server's `command` or `url`. If it defines multiple servers, pass `--server <name>` to choose one deterministically. The double-dash `--` separator is only needed for the fallback mode where the server command is supplied on the CLI instead of in policy config.
 
+mcpgate intentionally runs one active MCP server per process. For multiple MCP servers, configure one client entry and one mcpgate process per server; share a policy file if that makes operations simpler, but select each server explicitly with `--server`.
+
 ---
 
 ## Web API reference
 
 All endpoints require authentication. Pass the token as a `Bearer` header or `?token=` query param. Requests from non-localhost `Host` headers are rejected (anti-DNS-rebinding).
+
+Generate and store real dashboard tokens outside the repository. See [`docs/OPERATIONAL_SECRETS.md`](docs/OPERATIONAL_SECRETS.md) for storage and rotation guidance.
 
 ### `GET /health`
 
@@ -283,6 +290,7 @@ Events are broadcast as `event: <name>\ndata: <json>\n\n`.
 - **Interactive approval:** `ask` calls are parked for approval in the local UI and denied automatically on timeout.
 - **Prompt-poisoning detection:** Deterministic scanner warnings are signed into the audit chain and can be escalated with `heuristics.block_on_warn`.
 - **Process isolation:** stdio MCP servers are spawned with process-group isolation so `SIGTERM`/`SIGKILL` reaches the whole subprocess tree, not just the direct child.
+- **One active server per process:** multiplexing is explicit at the MCP client level; each mcpgate process fronts one selected server for simpler routing and audit attribution.
 
 ---
 
@@ -292,7 +300,7 @@ Events are broadcast as `event: <name>\ndata: <json>\n\n`.
 cmd/mcpgate/       — CLI entry point, flag parsing, wiring
 internal/
   policy/          — YAML config types, policy engine (pure function)
-  proxy/           — core message loop, verdict dispatch
+  proxy/           — core single-server message loop, verdict dispatch
   audit/           — SQLite write-ahead audit log
   approval/        — coordinator for pending human approvals
   child/           — spawn/stop child MCP server process

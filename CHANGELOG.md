@@ -10,10 +10,16 @@
 - **Structured argument constraints** — policy can constrain non-path fields with exact values, enums, anchored regexes, numeric ranges, and booleans.
 - **Symlink-aware path checks** — optional `path.resolve_within` resolves existing paths and roots before allowing filesystem operations.
 - **Showcase dashboard screenshot** — README and showcase docs now include a safe static dashboard capture.
+- **Showcase flow GIF** — docs include a compact safe demo recording asset for portfolio use.
+- **Operational secrets runbook** — token storage and rotation guidance now lives in `docs/OPERATIONAL_SECRETS.md`.
 
 ### Changed
 - Policy examples now treat `servers.<name>.command` as the source of the stdio server command instead of requiring the fallback `-- <server-command>` form.
 - Web API token checks now compare SHA-256 digests with constant-time comparison.
+- The multiplexing model is now explicit: one active selected MCP server per mcpgate process.
+
+### Removed
+- Removed the unused internal proxy router abstraction that implied future in-process multiplexing.
 
 ## [1.1.0] - 2026-05-31 — "See the poison"
 

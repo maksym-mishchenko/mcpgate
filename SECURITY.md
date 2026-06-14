@@ -79,6 +79,7 @@ When mcpgate shuts down (or the context is cancelled), it sends `SIGTERM` to the
 - **Constraint coverage:** Constraints are checked on the tool's `arguments.path` field. If no `path` argument is present, the constraint is not applicable and the allow value alone determines the verdict. This is intentional — constraints are defence-in-depth, not the primary gate.
 - **Structured argument constraints:** `constraints.fields` can enforce exact values, enums, anchored regexes, numeric ranges, and booleans for non-path arguments. Missing or malformed constrained arguments deny the call.
 - **Observe mode:** Setting `mode: observe` bypasses enforcement and allows all calls through. This mode is intended for discovery, not production use. Do not use `observe` mode in any environment where the MCP server has access to sensitive resources.
+- **One active server per process:** Each mcpgate process fronts one selected server. Run one process per MCP client server entry instead of adding an in-process routing layer that could blur audit attribution.
 
 ---
 
@@ -88,6 +89,8 @@ When mcpgate shuts down (or the context is cancelled), it sends `SIGTERM` to the
 - **Symlink checks are opt-in and existing-path only:** `path.resolve_within` uses filesystem resolution and fails closed if the path does not exist. Use `path.within` for create/write flows where the final path may not exist yet.
 - **TOCTOU:** Path validation occurs at policy-check time, not at actual filesystem access time. This is a known limitation documented in the source (`internal/policy/engine.go`).
 - **One active configured server per process:** mcpgate can define multiple policy servers, but one process runs one selected server. Use `--server` when a config contains multiple servers, or run one mcpgate process per MCP server.
+
+Operational token storage and rotation guidance lives in `docs/OPERATIONAL_SECRETS.md`.
 
 ---
 

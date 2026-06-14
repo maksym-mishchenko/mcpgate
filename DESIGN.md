@@ -45,9 +45,8 @@ internal/policy/
                 Easily unit-tested.
 
 internal/proxy/
-  proxy.go      The core loop: recv from agent, gate check, forward or deny.
+  proxy.go      The core single-server loop: recv from agent, gate check, forward or deny.
                 Depends on Transport (not stdio directly) and AuditStore (not SQLite directly).
-  router.go     Named transport registry for future multiplexing work.
 
 internal/audit/
   store.go      AuditStore interface. Injected into proxy, so tests can use a failing stub.
@@ -132,9 +131,18 @@ These are deliberate scope cuts, not oversights. See `ROADMAP.md` for planned se
 
 | Missing feature | Rationale |
 |-----------------|-----------|
-| Full MCP multiplexing | Policy config can define multiple stdio/HTTP servers, but one mcpgate process runs one selected server. Use `--server` when a config contains multiple servers, or run one gateway process per MCP server. |
 | TLS on the web API | The web API binds only to `127.0.0.1`. Adding TLS is straightforward but adds operational complexity (certificate management) that is out of scope for a local tool. |
-| Symlink resolution in path constraints | Requires disk I/O in the policy engine, which would make it impure and harder to test. Defence-in-depth: the OS and MCP server are expected to enforce their own boundaries. |
-| Structured argument constraints beyond `path` | The constraint system is extensible (`Constraints` struct), but only `path` is implemented. Other field types (numeric ranges, enum values) are future work. |
-| Audit log rotation / retention policy | The SQLite file grows indefinitely. Production deployments should configure external log rotation or use a different `AuditStore` implementation. |
 | Authentication of the child process | mcpgate trusts its own child process. A compromised MCP server binary could bypass policy by speaking JSON-RPC directly. This is a deployment concern, not a gateway concern. |
+
+## Multiplexing decision
+
+mcpgate supports multiple named server definitions in one policy file, but each process fronts exactly one selected MCP server. This is intentional for the showcase and current security model.
+
+The supported deployment model is:
+
+1. Define each server under `servers.<name>` in policy.
+2. Start one mcpgate process per client MCP entry.
+3. Pass `--server <name>` whenever the policy contains more than one server.
+4. Attribute every audit row to the selected server name.
+
+Full runtime multiplexing is not implemented because MCP clients already route by server entry. Adding another routing layer inside mcpgate would require synthetic tool names or protocol-level routing metadata, both of which make audit attribution and least-privilege policy harder to reason about. The unused internal router abstraction was removed so the source matches the supported model.

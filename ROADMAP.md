@@ -14,12 +14,12 @@ This roadmap tracks the next practical work for mcpgate after v1.1.0. GitHub iss
 |---|---|---|
 | Done | Keep README, DESIGN, SECURITY, and examples aligned with v1.1 behavior | Operators do not follow stale v0.1/v0.2 guidance |
 | Done | Make configured-server selection deterministic | `--server` selects a configured server and multi-server configs fail fast without an explicit choice |
-| P0 | Design full MCP multiplexing, if still needed | Decide whether one mcpgate process should ever expose multiple MCP servers at once, or whether clients should run one gateway per MCP server |
-| P1 | Document production-safe secret handling | No project guidance should hardcode API tokens; dashboard/mission-control tokens must live in a secret manager or environment variable and be rotated outside the repo |
+| Done | Design full MCP multiplexing, if still needed | Decided to keep one active server per process and removed the unused internal router abstraction |
+| Done | Document production-safe secret handling | Repo guidance points real tokens to external secret storage and rotation workflows |
 | Done | Add operator examples for stdio and HTTP policies | Users can configure local and remote MCP servers without reading source |
 | Done | Add release checklist | Tags, changelog, tests, and GoReleaser checks are explicit before every release |
 | Done | Add static dashboard screenshot | README and showcase docs include a safe demo screenshot with no live secrets |
-| P1 | Record showcase GIF or short video | Portfolio/demo flow can be shown without a live setup |
+| Done | Record showcase GIF or short video | Portfolio/demo flow can be shown without a live setup |
 
 ## v1.3.0 — Policy and path hardening
 
@@ -42,4 +42,4 @@ This roadmap tracks the next practical work for mcpgate after v1.1.0. GitHub iss
 
 ## Blocked / needs explicit approval
 
-- Rotate any existing dashboard or Mission Control API token that has appeared in shared project instructions. This is intentionally not done from this repo because secret rotation changes live infrastructure credentials and must be performed through the owning secret-management workflow.
+- Rotate any existing dashboard or Mission Control API token that has appeared in shared project instructions. This is intentionally not performed from this repo because secret rotation changes live infrastructure credentials and must be completed through the owning secret-management workflow.

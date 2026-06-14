@@ -33,14 +33,15 @@ Configure the MCP client to run `mcpgate --config /path/to/examples/simple-polic
 ## Assets
 
 - Static dashboard screenshot: [`docs/assets/showcase-dashboard.png`](assets/showcase-dashboard.png)
-- Remaining media work: capture an end-to-end GIF or short recording with the dashboard, terminal, and policy file side-by-side.
+- Short demo GIF: [`docs/assets/showcase-flow.gif`](assets/showcase-flow.gif)
+- Audit verification terminal screenshot: [`docs/assets/showcase-verify-terminal.png`](assets/showcase-verify-terminal.png)
 
 ## Screenshot and recording checklist
 
 1. Dashboard connected state. Captured in [`docs/assets/showcase-dashboard.png`](assets/showcase-dashboard.png).
 2. Pending approval card for `write_file`.
 3. Live audit table showing `ALLOW`, `DENY`, warning badge rows, and filters.
-4. Terminal showing `mcpgate verify --file audit.jsonl` succeeding after export.
+4. Terminal showing `mcpgate verify --file audit.jsonl` succeeding after export. Captured in [`docs/assets/showcase-verify-terminal.png`](assets/showcase-verify-terminal.png).
 5. Policy YAML beside the dashboard to show the allow/ask/deny mapping.
 
 ## Talk track

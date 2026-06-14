@@ -10,6 +10,11 @@
 **Rejected:** <alternatives and why not> (optional)
 
 -->
+## [2026-06-14] One process per MCP server  #infra
+**What:** Kept the supported model as one selected MCP server per mcpgate process, documented the decision, and removed the unused internal proxy router abstraction.
+**Why:** MCP clients already route by server entry; in-process multiplexing would require synthetic routing semantics that make policy and audit attribution harder to reason about.
+**Rejected:** Full runtime multiplexing inside one mcpgate process.
+
 ## [2026-06-13] Repository roadmap as backlog source  #build
 **What:** Added `ROADMAP.md` and aligned README/DESIGN/SECURITY with v1.1 behavior, including interactive approvals, reverse-channel gating, heuristic warnings, deterministic configured-server selection, and the current one-active-server-per-process limitation.
 **Why:** GitHub issues and `.agent/STATE.md` had no active backlog, so future agents needed an in-repo source of truth before continuing feature work.

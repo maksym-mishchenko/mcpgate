@@ -10,13 +10,14 @@ Last updated: 2026-06-13 by copilot
 - Added constant-time web token comparison, dashboard audit filters/warning details, and audit retention guidance.
 - Added structured field constraints and opt-in symlink-aware `path.resolve_within` checks.
 - Added a safe static dashboard screenshot at `docs/assets/showcase-dashboard.png`.
+- Documented the one-active-server-per-process multiplexing decision and removed the unused proxy router abstraction.
+- Added operational secret storage/rotation guidance and a safe showcase GIF asset.
 
 ## In progress
 
 ## Known issues
 - Plain Go VCS stamping can fail in generated Copilot worktrees; use `-buildvcs=false` locally if needed.
-- Full MCP multiplexing remains a roadmap decision; one mcpgate process currently runs one selected MCP server.
-- Any dashboard or Mission Control API token that appeared in shared instructions must be rotated through the owning secret-management workflow.
+- Any dashboard or Mission Control API token that appeared in shared instructions must be rotated through the owning secret-management workflow; this cannot be safely completed from the repository.
 
 ## Next steps
-- Use the GitHub issue backlog for remaining hardening work, especially full multiplexing, secret rotation, and showcase GIF/video capture.
+- Use the GitHub issue backlog for live secret rotation, which remains external to this repository.

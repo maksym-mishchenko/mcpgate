@@ -17,6 +17,8 @@
 - Policy examples now treat `servers.<name>.command` as the source of the stdio server command instead of requiring the fallback `-- <server-command>` form.
 - Web API token checks now compare SHA-256 digests with constant-time comparison.
 - The multiplexing model is now explicit: one active selected MCP server per mcpgate process.
+- The module Go directive now targets the dependency-required Go 1.25 baseline.
+- GoReleaser archive configuration now uses the v2 `formats` key for Windows zip archives.
 
 ### Removed
 - Removed the unused internal proxy router abstraction that implied future in-process multiplexing.

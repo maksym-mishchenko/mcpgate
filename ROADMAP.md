@@ -42,4 +42,4 @@ This roadmap tracks the next practical work for mcpgate after v1.1.0. GitHub iss
 
 ## Blocked / needs explicit approval
 
-- Rotate any existing dashboard or Mission Control API token that has appeared in shared project instructions. This is intentionally not performed from this repo because secret rotation changes live infrastructure credentials and must be completed through the owning secret-management workflow.
+- No blocked repository-local roadmap items.

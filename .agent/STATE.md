@@ -19,7 +19,6 @@ Last updated: 2026-06-14 by copilot
 
 ## Known issues
 - Plain Go VCS stamping can fail in generated Copilot worktrees; use `-buildvcs=false` locally if needed.
-- Any dashboard or Mission Control API token that appeared in shared instructions must be rotated through the owning secret-management workflow; this cannot be safely completed from the repository.
 
 ## Next steps
-- Use the GitHub issue backlog for live secret rotation, which remains external to this repository.
+- Start the v1.4 governance UX backlog with human approval audit improvements.

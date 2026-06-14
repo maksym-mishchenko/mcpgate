@@ -71,6 +71,7 @@ func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 
 	verdict := policy.Evaluate(p.cfg.ServerName, msg.Method, name, args, p.cfg.PolicyConfig)
 	reason := "policy"
+	approvalSource := "policy"
 
 	// For ask/unknown in enforce mode: park for human approval.
 	if (verdict == policy.VerdictAsk || verdict == policy.VerdictUnknown) &&
@@ -110,12 +111,15 @@ func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 
 		if err != nil {
 			reason = "timeout"
+			approvalSource = "timeout"
 			verdict = policy.VerdictDeny
 		} else if v == approval.VerdictAllow {
 			reason = "human:allow"
+			approvalSource = "human"
 			verdict = policy.VerdictAllow
 		} else {
 			reason = "human:deny"
+			approvalSource = "human"
 			verdict = policy.VerdictDeny
 		}
 	}
@@ -134,6 +138,7 @@ func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 		if len(warnings) > 0 && p.blockOnWarn() && verdict == policy.VerdictAllow {
 			verdict = policy.VerdictDeny
 			reason = "heuristic:block_on_warn"
+			approvalSource = "heuristic"
 		}
 	}
 
@@ -148,13 +153,14 @@ func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 
 	argsJSON, _ := json.Marshal(args)
 	entry := audit.Entry{
-		Method:   msg.Method,
-		Server:   p.cfg.ServerName,
-		Name:     name,
-		Args:     string(argsJSON),
-		Verdict:  verdictStr(verdict),
-		Reason:   reason,
-		Warnings: warnings,
+		Method:         msg.Method,
+		Server:         p.cfg.ServerName,
+		Name:           name,
+		Args:           string(argsJSON),
+		Verdict:        verdictStr(verdict),
+		Reason:         reason,
+		ApprovalSource: approvalSource,
+		Warnings:       warnings,
 	}
 	if err := p.cfg.AuditStore.Append(entry); err != nil {
 		slog.Error("audit write failed — denying call", "err", err)
@@ -184,13 +190,14 @@ func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 					inReason = "heuristic:inbound:block_on_warn"
 				}
 				inEntry := audit.Entry{
-					Method:   msg.Method,
-					Server:   p.cfg.ServerName,
-					Name:     name,
-					Args:     "",
-					Verdict:  verdictStr(inVerdict),
-					Reason:   inReason,
-					Warnings: w,
+					Method:         msg.Method,
+					Server:         p.cfg.ServerName,
+					Name:           name,
+					Args:           "",
+					Verdict:        verdictStr(inVerdict),
+					Reason:         inReason,
+					ApprovalSource: "heuristic",
+					Warnings:       w,
 				}
 				if err := p.cfg.AuditStore.Append(inEntry); err != nil {
 					slog.Error("inbound audit write failed — withholding result", "err", err)
@@ -266,6 +273,7 @@ func (p *Proxy) recvServerResponse(ctx context.Context) (jsonrpc.Message, error)
 func (p *Proxy) handleServerRequest(ctx context.Context, msg jsonrpc.Message) error {
 	verdict := policy.Evaluate(p.cfg.ServerName, msg.Method, "", nil, p.cfg.PolicyConfig)
 	reason := "policy"
+	approvalSource := "policy"
 
 	var warnings []audit.Warning
 	if p.heuristicsEnabled() {
@@ -273,6 +281,7 @@ func (p *Proxy) handleServerRequest(ctx context.Context, msg jsonrpc.Message) er
 		if len(warnings) > 0 && p.blockOnWarn() && verdict == policy.VerdictAllow {
 			verdict = policy.VerdictDeny
 			reason = "heuristic:block_on_warn"
+			approvalSource = "heuristic"
 		}
 	}
 
@@ -285,13 +294,14 @@ func (p *Proxy) handleServerRequest(ctx context.Context, msg jsonrpc.Message) er
 	)
 
 	entry := audit.Entry{
-		Method:   msg.Method,
-		Server:   p.cfg.ServerName,
-		Name:     "",
-		Args:     "",
-		Verdict:  verdictStr(verdict),
-		Reason:   reason,
-		Warnings: warnings,
+		Method:         msg.Method,
+		Server:         p.cfg.ServerName,
+		Name:           "",
+		Args:           "",
+		Verdict:        verdictStr(verdict),
+		Reason:         reason,
+		ApprovalSource: approvalSource,
+		Warnings:       warnings,
 	}
 	if err := p.cfg.AuditStore.Append(entry); err != nil {
 		slog.Error("audit write failed — denying reverse call", "err", err)

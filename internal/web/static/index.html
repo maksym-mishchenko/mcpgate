@@ -102,12 +102,21 @@
       </label>
       <label>Method <input id="filter-method" type="search" placeholder="tools/call" oninput="renderAuditRows()"></label>
       <label>Server <input id="filter-server" type="search" placeholder="filesystem" oninput="renderAuditRows()"></label>
+      <label>Source
+        <select id="filter-source" onchange="renderAuditRows()">
+          <option value="">Any</option>
+          <option value="policy">Policy</option>
+          <option value="human">Human</option>
+          <option value="timeout">Timeout</option>
+          <option value="heuristic">Heuristic</option>
+        </select>
+      </label>
       <label><input id="filter-warnings" type="checkbox" onchange="renderAuditRows()"> Warnings only</label>
     </div>
     <div id="audit-table-wrap">
       <table>
         <thead><tr>
-          <th>Time</th><th>Server</th><th>Method</th><th>Name</th><th>Verdict</th><th>Reason</th>
+          <th>Time</th><th>Server</th><th>Method</th><th>Name</th><th>Verdict</th><th>Source</th><th>Reason</th>
         </tr></thead>
         <tbody id="audit-body"></tbody>
       </table>
@@ -182,14 +191,17 @@ function matchesAuditFilters(e) {
   const verdictFilter = document.getElementById('filter-verdict').value;
   const methodFilter = document.getElementById('filter-method').value.toLowerCase();
   const serverFilter = document.getElementById('filter-server').value.toLowerCase();
+  const sourceFilter = document.getElementById('filter-source').value.toLowerCase();
   const warningsOnly = document.getElementById('filter-warnings').checked;
   const verdict = (e.Verdict || e.verdict || '').toUpperCase();
   const method = (e.Method || e.method || '').toLowerCase();
   const server = (e.Server || e.server || '').toLowerCase();
+  const source = approvalSource(e).toLowerCase();
   const warnings = e.Warnings || e.warnings || [];
   return (!verdictFilter || verdict === verdictFilter)
     && (!methodFilter || method.includes(methodFilter))
     && (!serverFilter || server.includes(serverFilter))
+    && (!sourceFilter || source === sourceFilter)
     && (!warningsOnly || warnings.length > 0);
 }
 
@@ -201,8 +213,12 @@ function auditRowElement(e) {
   tr.className = vClass;
   const warnings = e.Warnings || e.warnings || [];
   const warnBadge = renderWarnings(warnings);
-  tr.innerHTML = `<td>${esc(ts)}</td><td>${esc(e.Server||e.server||'')}</td><td>${esc(e.Method||e.method||'')}</td><td>${esc(e.Name||e.name||'')}</td><td class="verdict-${vClass}">${warnBadge}${esc(verdict)}</td><td>${esc(e.Reason||e.reason||'')}</td>`;
+  tr.innerHTML = `<td>${esc(ts)}</td><td>${esc(e.Server||e.server||'')}</td><td>${esc(e.Method||e.method||'')}</td><td>${esc(e.Name||e.name||'')}</td><td class="verdict-${vClass}">${warnBadge}${esc(verdict)}</td><td>${esc(approvalSource(e))}</td><td>${esc(e.Reason||e.reason||'')}</td>`;
   return tr;
+}
+
+function approvalSource(e) {
+  return e.ApprovalSource || e.approval_source || '';
 }
 
 function renderWarnings(warnings) {

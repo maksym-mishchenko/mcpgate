@@ -10,6 +10,11 @@
 **Rejected:** <alternatives and why not> (optional)
 
 -->
+## [2026-06-14] Approval source is explicit audit metadata  #data
+**What:** Audit rows now carry `approval_source` for policy, human, timeout, and heuristic decisions, and exports include the same field when present.
+**Why:** Governance review needs to filter and verify manual UI decisions separately from automatic timeout denials and policy-only outcomes without parsing free-form reason strings.
+**Rejected:** Inferring the source only from `reason`; this was brittle for exports and dashboard filters.
+
 ## [2026-06-14] Missing constrained allow paths fail closed  #auth
 **What:** Path-constrained `allow: "true"` rules now deny calls that omit `arguments.path`.
 **Why:** A configured path constraint on an allow rule means the rule is only safe when the target path is available for evaluation. Allowing missing paths contradicted the deny-by-default constraint model and weakened the TOCTOU hardening story.

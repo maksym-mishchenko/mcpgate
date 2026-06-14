@@ -20,6 +20,8 @@
   - Owns user-facing configuration reference. Update constraint semantics and TOCTOU note.
 - Modify: `SECURITY.md`
   - Owns threat model and limitation language. Update the path-policy bullets to match the new fail-closed behavior.
+- Modify: `CHANGELOG.md`
+  - Owns operator-facing release notes. Record the missing-path fail-closed behavior change under `## Unreleased`.
 - Modify: `examples/simple-policy.yaml`
   - Owns the stdio filesystem example. Show `resolve_within` for existing read/list flows and `within` for ask-gated writes.
 - Modify: `examples/http-policy.yaml`
@@ -33,10 +35,11 @@
 
 ---
 
-## Task 1: Add failing tests for missing path and string-level path boundaries
+## Task 1: Implement missing path denial with TDD
 
 **Files:**
 - Modify: `internal/policy/engine_test.go`
+- Modify: `internal/policy/engine.go`
 
 - [ ] **Step 1: Add failing tests near existing `TestWithinPathComponent` and `TestWithinDotDot`**
 
@@ -96,18 +99,11 @@ Expected: PASS.
 git --no-pager status --short
 ```
 
-Expected: `internal/policy/engine_test.go` is modified and the missing-path test is still failing. Do not commit a red test; Task 2 commits the test and implementation together after the test passes.
+Expected: `internal/policy/engine_test.go` is modified and the missing-path test is still failing. Do not commit a red test yet.
 
----
+- [ ] **Step 5: Change `checkConstraints` missing-path behavior**
 
-## Task 2: Make missing path arguments fail closed
-
-**Files:**
-- Modify: `internal/policy/engine.go:115-124`
-
-- [ ] **Step 1: Change `checkConstraints` missing-path behavior**
-
-Replace the path block in `checkConstraints` with:
+In `internal/policy/engine.go`, find the `if c.Path != nil { ... }` block inside `checkConstraints` and replace that exact block with:
 
 ```go
 	if c.Path != nil {
@@ -121,7 +117,7 @@ Replace the path block in `checkConstraints` with:
 	}
 ```
 
-- [ ] **Step 2: Run the previously failing test and verify it passes**
+- [ ] **Step 6: Run the previously failing test and verify it passes**
 
 Run:
 
@@ -131,7 +127,7 @@ go test -buildvcs=false ./internal/policy -run TestPathConstraintMissingPathDeni
 
 Expected: PASS.
 
-- [ ] **Step 3: Run the full policy package tests**
+- [ ] **Step 7: Run the full policy package tests**
 
 Run:
 
@@ -141,7 +137,7 @@ go test -buildvcs=false ./internal/policy -count=1
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit the tests and implementation**
+- [ ] **Step 8: Commit the tests and implementation**
 
 ```bash
 git add internal/policy/engine.go internal/policy/engine_test.go
@@ -150,7 +146,7 @@ git commit -m "fix(policy): deny missing constrained paths" -m "Co-authored-by: 
 
 ---
 
-## Task 3: Expand `resolve_within` fail-closed tests
+## Task 2: Expand `resolve_within` fail-closed tests
 
 **Files:**
 - Modify: `internal/policy/engine_test.go`
@@ -219,22 +215,22 @@ git commit -m "test(policy): cover resolve_within missing roots" -m "Co-authored
 
 ---
 
-## Task 4: Update operator docs and examples
+## Task 3: Update operator docs and examples
 
 **Files:**
-- Modify: `README.md:145-200`
-- Modify: `SECURITY.md:73-91`
+- Modify: `README.md`
+- Modify: `SECURITY.md`
+- Modify: `CHANGELOG.md`
 - Modify: `examples/simple-policy.yaml`
 - Modify: `examples/http-policy.yaml`
 
 - [ ] **Step 1: Update README constraint reference**
 
-In `README.md`, replace the constraints table rows at lines 193-195 with:
+In `README.md`, update only the existing `path.within` and `path.resolve_within` rows in the constraints table. Preserve the existing `path.equals` and all `fields.*` rows. The final first two path rows should read:
 
 ```markdown
 | `path.within` | `arguments.path` | String-level absolute path containment check; no symlink resolution; useful for planned writes or new paths |
 | `path.resolve_within` | `arguments.path` | Opt-in `EvalSymlinks` containment check for existing paths; fails closed if the path or root cannot be resolved |
-| `path.equals` / `path.one_of` / `path.matches` | `arguments.path` | Exact, enum, or anchored RE2 checks |
 ```
 
 Replace the sentence after the table with:
@@ -262,7 +258,15 @@ In `SECURITY.md`, replace the TOCTOU limitation bullet with:
 - **TOCTOU:** Path validation occurs at policy-check time, not at actual filesystem access time. MCP-GATE reduces risk before forwarding, but race-free enforcement belongs in the child MCP server sandbox or the operating system.
 ```
 
-- [ ] **Step 3: Update `examples/simple-policy.yaml` read/list constraints**
+- [ ] **Step 3: Add CHANGELOG entry**
+
+In `CHANGELOG.md`, under `## Unreleased` → `### Changed`, add:
+
+```markdown
+- Path-constrained rules now fail closed when `arguments.path` is missing, instead of treating the path constraint as not applicable.
+```
+
+- [ ] **Step 4: Update `examples/simple-policy.yaml` read/list constraints**
 
 Change `read_file` to:
 
@@ -301,7 +305,7 @@ Change `list_directory` to:
               bool: false
 ```
 
-- [ ] **Step 4: Update `examples/http-policy.yaml` comments**
+- [ ] **Step 5: Update `examples/http-policy.yaml` comments**
 
 Change the `read_file` block to:
 
@@ -330,26 +334,26 @@ Change the `write_file` block to:
               one_of: ["create", "overwrite"]
 ```
 
-- [ ] **Step 5: Review docs for stale missing-path language**
+- [ ] **Step 6: Review docs for stale missing-path language**
 
 Run:
 
 ```bash
-grep -RIn "no path arg\\|constraint is not applicable\\|If no .*path" README.md SECURITY.md docs examples internal/policy || true
+grep -RIn "no path arg\\|constraint is not applicable\\|If no .*path" README.md SECURITY.md DESIGN.md CHANGELOG.md AGENTS.md docs examples internal/policy || true
 ```
 
 Expected: no output that claims missing path is allowed or not applicable.
 
-- [ ] **Step 6: Commit docs and examples**
+- [ ] **Step 7: Commit docs and examples**
 
 ```bash
-git add README.md SECURITY.md examples/simple-policy.yaml examples/http-policy.yaml
+git add README.md SECURITY.md CHANGELOG.md examples/simple-policy.yaml examples/http-policy.yaml
 git commit -m "docs: clarify path TOCTOU boundary" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
 
 ---
 
-## Task 5: Update roadmap and agent memory
+## Task 4: Update roadmap and agent memory
 
 **Files:**
 - Modify: `ROADMAP.md`
@@ -401,7 +405,7 @@ git commit -m "docs: mark TOCTOU path hardening complete" -m "Co-authored-by: Co
 
 ---
 
-## Task 6: Final verification
+## Task 5: Final verification
 
 **Files:**
 - Verify all modified files.

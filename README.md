@@ -190,14 +190,16 @@ heuristics:
 
 | Constraint | Applies to | Behavior |
 |---|---|---|
-| `path.within` | `arguments.path` | String-level absolute path containment check; no symlink resolution |
+| `path.within` | `arguments.path` | String-level absolute path containment check; no symlink resolution; useful for planned writes or new paths |
 | `path.resolve_within` | `arguments.path` | Opt-in `EvalSymlinks` containment check for existing paths; fails closed if the path or root cannot be resolved |
 | `path.equals` / `path.one_of` / `path.matches` | `arguments.path` | Exact, enum, or anchored RE2 checks |
 | `fields.<name>.equals` / `one_of` / `matches` | any string argument | Exact, enum, or anchored RE2 checks |
 | `fields.<name>.min` / `max` | numeric argument | Parses the argument as a float and denies on parse/range failure |
 | `fields.<name>.bool` | boolean argument | Parses the argument as a bool and denies on mismatch |
 
-Missing constrained fields deny the call. Invalid regexes, unparseable numbers, unparseable booleans, and unresolved symlinks fail closed.
+Missing constrained fields deny the call. Invalid regexes, unparseable numbers, unparseable booleans, unresolved symlinks, and missing `path` values for path-constrained rules fail closed.
+
+**TOCTOU boundary:** Path checks run before the call is forwarded. The child MCP server performs actual filesystem I/O later, so high-risk deployments should combine mcpgate policy with the MCP server's own root restrictions, read-only mounts where possible, containers, or OS-level permissions.
 
 ---
 

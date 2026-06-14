@@ -21,13 +21,16 @@ servers:
         allow: "true"
         constraints:
           path:
+            # within is a string-level containment check.
             within: ["/srv/safe"]
+            # resolve_within adds symlink defense for existing paths.
             resolve_within: ["/srv/safe"]
 
       write_file:
         allow: ask
         constraints:
           path:
+            # Use within for writes because a new target may not exist yet.
             within: ["/srv/safe"]
           fields:
             mode:

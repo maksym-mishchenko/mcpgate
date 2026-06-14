@@ -74,9 +74,10 @@ When mcpgate shuts down (or the context is cancelled), it sends `SIGTERM` to the
 
 - **Deny by default:** In `enforce` mode, any tool call not matched by an explicit policy rule returns `DENY`. There is no implicit allow.
 - **Explicit allowlist:** Tools must be listed under `servers.<name>.tools` with `allow: "true"` to be forwarded.
-- **Path traversal protection:** The `path.within` constraint rejects relative paths, empty paths, and paths that are not component-wise children of the allowed roots. For example, `/home/safe-evil` will not pass a `/home/safe` constraint. See `internal/policy/engine.go` for the `pathWithin` function.
+- **Path traversal protection:** The `path.within` constraint rejects missing, relative, empty, non-clean, and prefix-trick paths. For example, `/home/safe-evil` will not pass a `/home/safe` constraint. This is a string-level check and does not resolve symlinks.
 - **Symlink-aware path checks:** Use `path.resolve_within` when a tool operates on existing filesystem paths and the gateway should resolve symlinks before allowing the call. It fails closed when the path or root cannot be resolved.
-- **Constraint coverage:** Constraints are checked on the tool's `arguments.path` field. If no `path` argument is present, the constraint is not applicable and the allow value alone determines the verdict. This is intentional — constraints are defence-in-depth, not the primary gate.
+- **Constraint coverage:** Missing constrained fields deny the call. For path-constrained tools, a missing `arguments.path` denies instead of falling back to the rule's allow value.
+- **TOCTOU boundary:** Path validation occurs at policy-check time, before the child MCP server performs filesystem I/O. Use MCP server root restrictions, read-only mounts, containers, or OS-level permissions when race-free filesystem confinement matters.
 - **Structured argument constraints:** `constraints.fields` can enforce exact values, enums, anchored regexes, numeric ranges, and booleans for non-path arguments. Missing or malformed constrained arguments deny the call.
 - **Observe mode:** Setting `mode: observe` bypasses enforcement and allows all calls through. This mode is intended for discovery, not production use. Do not use `observe` mode in any environment where the MCP server has access to sensitive resources.
 - **One active server per process:** Each mcpgate process fronts one selected server. Run one process per MCP client server entry instead of adding an in-process routing layer that could blur audit attribution.
@@ -87,7 +88,7 @@ When mcpgate shuts down (or the context is cancelled), it sends `SIGTERM` to the
 
 - **No TLS:** The web API listens on plain HTTP. The localhost-only bind and Host-check mitigate this for local use, but do not use mcpgate as a remotely-accessible service without adding a TLS terminator.
 - **Symlink checks are opt-in and existing-path only:** `path.resolve_within` uses filesystem resolution and fails closed if the path does not exist. Use `path.within` for create/write flows where the final path may not exist yet.
-- **TOCTOU:** Path validation occurs at policy-check time, not at actual filesystem access time. This is a known limitation documented in the source (`internal/policy/engine.go`).
+- **TOCTOU:** Path validation occurs at policy-check time, not at actual filesystem access time. MCP-GATE reduces risk before forwarding, but race-free enforcement belongs in the child MCP server sandbox or the operating system.
 - **One active configured server per process:** mcpgate can define multiple policy servers, but one process runs one selected server. Use `--server` when a config contains multiple servers, or run one mcpgate process per MCP server.
 
 Operational token storage and rotation guidance lives in `docs/OPERATIONAL_SECRETS.md`.

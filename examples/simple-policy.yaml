@@ -20,27 +20,32 @@ servers:
     command: ["/usr/local/bin/mcp-filesystem", "--root", "/home/user/safe"]
 
     tools:
-      # read_file: allowed, but only within the safe directory.
+      # read_file: allowed for existing paths within the safe directory.
+      # resolve_within adds symlink defense and fails closed if the path/root
+      # cannot be resolved.
       read_file:
         allow: "true"
         constraints:
           path:
             within: ["/home/user/safe"]
+            resolve_within: ["/home/user/safe"]
 
       # write_file: requires human approval before executing.
-      # The browser UI shows an approval card and auto-denies on timeout.
+      # Use within rather than resolve_within because a newly-created file may
+      # not exist at policy-check time.
       write_file:
         allow: ask
         constraints:
           path:
             within: ["/home/user/safe"]
 
-      # list_directory: allowed, constrained to safe root.
+      # list_directory: allowed for existing directories under safe root.
       list_directory:
         allow: "true"
         constraints:
           path:
             within: ["/home/user/safe"]
+            resolve_within: ["/home/user/safe"]
           fields:
             recursive:
               bool: false

@@ -88,6 +88,32 @@ func TestWithinDotDot(t *testing.T) {
 	}
 }
 
+func TestPathConstraintMissingPathDenies(t *testing.T) {
+	c := cfg()
+	got := policy.Evaluate("fs", "tools/call", "read_file", map[string]string{}, c)
+	if got != policy.VerdictDeny {
+		t.Errorf("missing path under path constraint: got %v, want deny", got)
+	}
+}
+
+func TestWithinRelativePathDenies(t *testing.T) {
+	c := cfg()
+	got := policy.Evaluate("fs", "tools/call", "read_file",
+		map[string]string{"path": "home/safe/a.txt"}, c)
+	if got != policy.VerdictDeny {
+		t.Errorf("relative path: got %v, want deny", got)
+	}
+}
+
+func TestWithinCleanPathRequired(t *testing.T) {
+	c := cfg()
+	got := policy.Evaluate("fs", "tools/call", "read_file",
+		map[string]string{"path": "/home/safe//a.txt"}, c)
+	if got != policy.VerdictDeny {
+		t.Errorf("non-clean path: got %v, want deny", got)
+	}
+}
+
 func TestSamplingAllow(t *testing.T) {
 	cfg := &policy.Config{
 		Version: 1,

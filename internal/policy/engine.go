@@ -116,7 +116,7 @@ func checkConstraints(c *Constraints, args map[string]string) Verdict {
 	if c.Path != nil {
 		pathVal, ok := args["path"]
 		if !ok {
-			return VerdictAllow // no path arg → constraint not applicable
+			return VerdictDeny
 		}
 		if v := checkPathConstraint(c.Path, pathVal); v != VerdictAllow {
 			return v

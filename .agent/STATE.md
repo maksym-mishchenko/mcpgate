@@ -12,6 +12,8 @@ Last updated: 2026-06-14 by copilot
 - Added a safe static dashboard screenshot at `docs/assets/showcase-dashboard.png`.
 - Documented the one-active-server-per-process multiplexing decision and removed the unused proxy router abstraction.
 - Added operational secret storage/rotation guidance and a safe showcase GIF asset.
+- Tightened path-constrained `allow: "true"` rules so missing `arguments.path` fails closed.
+- Added deterministic TOCTOU/path-boundary tests and updated operator guidance for `path.within` versus `path.resolve_within`.
 
 ## In progress
 

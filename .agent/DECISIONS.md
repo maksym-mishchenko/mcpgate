@@ -10,6 +10,11 @@
 **Rejected:** <alternatives and why not> (optional)
 
 -->
+## [2026-06-14] Missing constrained allow paths fail closed  #auth
+**What:** Path-constrained `allow: "true"` rules now deny calls that omit `arguments.path`.
+**Why:** A configured path constraint on an allow rule means the rule is only safe when the target path is available for evaluation. Allowing missing paths contradicted the deny-by-default constraint model and weakened the TOCTOU hardening story.
+**Rejected:** Keeping missing path as "constraint not applicable"; this preserved compatibility but allowed path-scoped allow rules to pass calls without the scoped argument. Evaluating constraints for `ask` prompts was left out of scope because current approval semantics require manual approver inspection.
+
 ## [2026-06-14] One process per MCP server  #infra
 **What:** Kept the supported model as one selected MCP server per mcpgate process, documented the decision, and removed the unused internal proxy router abstraction.
 **Why:** MCP clients already route by server entry; in-process multiplexing would require synthetic routing semantics that make policy and audit attribution harder to reason about.

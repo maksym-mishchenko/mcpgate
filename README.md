@@ -196,7 +196,7 @@ heuristics:
 | `fields.<name>.min` / `max` | numeric argument | Parses the argument as a float and denies on parse/range failure |
 | `fields.<name>.bool` | boolean argument | Parses the argument as a bool and denies on mismatch |
 
-Missing constrained fields deny the call. Invalid regexes, unparseable numbers, unparseable booleans, unresolved symlinks, and missing `path` values for path-constrained rules fail closed.
+For constraint-evaluated `allow: "true"` rules, missing constrained fields deny the call. Invalid regexes, unparseable numbers, unparseable booleans, unresolved symlinks, and missing `path` values for path-constrained allow rules fail closed. `ask` prompts do not evaluate constraints; approvers must inspect proposed paths manually.
 
 **TOCTOU boundary:** Path checks run before the call is forwarded. The child MCP server performs actual filesystem I/O later, so high-risk deployments should combine mcpgate policy with the MCP server's own root restrictions, read-only mounts where possible, containers, or OS-level permissions.
 

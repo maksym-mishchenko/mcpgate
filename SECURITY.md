@@ -74,9 +74,9 @@ When mcpgate shuts down (or the context is cancelled), it sends `SIGTERM` to the
 
 - **Deny by default:** In `enforce` mode, any tool call not matched by an explicit policy rule returns `DENY`. There is no implicit allow.
 - **Explicit allowlist:** Tools must be listed under `servers.<name>.tools` with `allow: "true"` to be forwarded.
-- **Path traversal protection:** The `path.within` constraint rejects missing, relative, empty, non-clean, and prefix-trick paths. For example, `/home/safe-evil` will not pass a `/home/safe` constraint. This is a string-level check and does not resolve symlinks.
+- **Path traversal protection:** When evaluated, the `path.within` constraint rejects missing, relative, empty, non-clean, and prefix-trick paths. For example, `/home/safe-evil` will not pass a `/home/safe` constraint. This is a string-level check and does not resolve symlinks.
 - **Symlink-aware path checks:** Use `path.resolve_within` when a tool operates on existing filesystem paths and the gateway should resolve symlinks before allowing the call. It fails closed when the path or root cannot be resolved.
-- **Constraint coverage:** Missing constrained fields deny the call. For path-constrained tools, a missing `arguments.path` denies instead of falling back to the rule's allow value.
+- **Constraint coverage:** For constraint-evaluated `allow: "true"` rules, missing constrained fields deny the call. For path-constrained allow rules, a missing `arguments.path` denies instead of falling back to the rule's allow value. `ask` rules do not evaluate constraints; approvers must inspect proposed paths manually.
 - **TOCTOU boundary:** Path validation occurs at policy-check time, before the child MCP server performs filesystem I/O. Use MCP server root restrictions, read-only mounts, containers, or OS-level permissions when race-free filesystem confinement matters.
 - **Structured argument constraints:** `constraints.fields` can enforce exact values, enums, anchored regexes, numeric ranges, and booleans for non-path arguments. Missing or malformed constrained arguments deny the call.
 - **Observe mode:** Setting `mode: observe` bypasses enforcement and allows all calls through. This mode is intended for discovery, not production use. Do not use `observe` mode in any environment where the MCP server has access to sensitive resources.

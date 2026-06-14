@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Tighten MCP-GATE path constraints so missing path arguments fail closed, then document the TOCTOU boundary and operator mitigations.
+**Goal:** Tighten MCP-GATE path constraints so missing path arguments fail closed for constraint-evaluated `allow: "true"` rules, then document the TOCTOU boundary and operator mitigations.
 
 **Architecture:** Keep all behavior changes inside `internal/policy`; the proxy, audit, transport, and web layers stay unchanged. Use deterministic unit tests for policy-time behavior and update operator docs/examples to distinguish string-only path checks from disk-aware symlink checks.
 
@@ -236,7 +236,7 @@ In `README.md`, update only the existing `path.within` and `path.resolve_within`
 Replace the sentence after the table with:
 
 ```markdown
-Missing constrained fields deny the call. Invalid regexes, unparseable numbers, unparseable booleans, unresolved symlinks, and missing `path` values for path-constrained rules fail closed.
+For constraint-evaluated `allow: "true"` rules, missing constrained fields deny the call. Invalid regexes, unparseable numbers, unparseable booleans, unresolved symlinks, and missing `path` values for path-constrained allow rules fail closed. `ask` prompts do not evaluate constraints; approvers must inspect proposed paths manually.
 
 **TOCTOU boundary:** Path checks run before the call is forwarded. The child MCP server performs actual filesystem I/O later, so high-risk deployments should combine mcpgate policy with the MCP server's own root restrictions, read-only mounts where possible, containers, or OS-level permissions.
 ```
@@ -246,9 +246,9 @@ Missing constrained fields deny the call. Invalid regexes, unparseable numbers, 
 In `SECURITY.md`, replace the path-related bullets under `### Policy model` with:
 
 ```markdown
-- **Path traversal protection:** The `path.within` constraint rejects missing, relative, empty, non-clean, and prefix-trick paths. For example, `/home/safe-evil` will not pass a `/home/safe` constraint. This is a string-level check and does not resolve symlinks.
+- **Path traversal protection:** When evaluated, the `path.within` constraint rejects missing, relative, empty, non-clean, and prefix-trick paths. For example, `/home/safe-evil` will not pass a `/home/safe` constraint. This is a string-level check and does not resolve symlinks.
 - **Symlink-aware path checks:** Use `path.resolve_within` when a tool operates on existing filesystem paths and the gateway should resolve symlinks before allowing the call. It fails closed when the path or root cannot be resolved.
-- **Constraint coverage:** Missing constrained fields deny the call. For path-constrained tools, a missing `arguments.path` denies instead of falling back to the rule's allow value.
+- **Constraint coverage:** For constraint-evaluated `allow: "true"` rules, missing constrained fields deny the call. For path-constrained allow rules, a missing `arguments.path` denies instead of falling back to the rule's allow value. `ask` rules do not evaluate constraints; approvers must inspect proposed paths manually.
 - **TOCTOU boundary:** Path validation occurs at policy-check time, before the child MCP server performs filesystem I/O. Use MCP server root restrictions, read-only mounts, containers, or OS-level permissions when race-free filesystem confinement matters.
 ```
 
@@ -263,7 +263,7 @@ In `SECURITY.md`, replace the TOCTOU limitation bullet with:
 In `CHANGELOG.md`, under `## Unreleased` → `### Changed`, add:
 
 ```markdown
-- Path-constrained rules now fail closed when `arguments.path` is missing, instead of treating the path constraint as not applicable.
+- Constraint-evaluated `allow: "true"` path rules now fail closed when `arguments.path` is missing, instead of treating the path constraint as not applicable.
 ```
 
 - [ ] **Step 4: Update `examples/simple-policy.yaml` read/list constraints**
@@ -366,7 +366,7 @@ In `ROADMAP.md`, replace:
 with:
 
 ```markdown
-| Done | TOCTOU guidance and tests | Path checks document the boundary between policy-time validation and child-process I/O, and missing path arguments fail closed |
+| Done | TOCTOU guidance and tests | Path checks document the boundary between policy-time validation and child-process I/O, and missing path arguments fail closed for constraint-evaluated `allow: "true"` rules |
 ```
 
 - [ ] **Step 2: Update `.agent/STATE.md`**
@@ -374,7 +374,7 @@ with:
 Add these bullets under `## Done`:
 
 ```markdown
-- Tightened path-constrained rules so missing `arguments.path` fails closed.
+- Tightened constraint-evaluated `allow: "true"` path rules so missing `arguments.path` fails closed.
 - Added deterministic TOCTOU/path-boundary tests and updated operator guidance for `path.within` versus `path.resolve_within`.
 ```
 
@@ -385,9 +385,9 @@ Remove any stale next-step item that says TOCTOU path guidance/tests are still p
 Add this entry near the top of `.agent/DECISIONS.md` under the template:
 
 ```markdown
-## [2026-06-14] Missing constrained paths fail closed  #auth
-**What:** Path-constrained rules now deny calls that omit `arguments.path`.
-**Why:** A configured path constraint means the rule is only safe when the target path is available for evaluation. Allowing missing paths contradicted the deny-by-default constraint model and weakened the TOCTOU hardening story.
+## [2026-06-14] Missing constrained allow paths fail closed  #auth
+**What:** Constraint-evaluated `allow: "true"` path rules now deny calls that omit `arguments.path`.
+**Why:** A path constraint on an allow rule is only safe when the target path is available for evaluation. Allowing missing paths contradicted the deny-by-default constraint model and weakened the TOCTOU hardening story.
 **Rejected:** Keeping missing path as "constraint not applicable"; this preserved compatibility but allowed path-scoped allow rules to pass calls without the scoped argument.
 ```
 
@@ -462,6 +462,6 @@ Expected: commit is created only when `git status --short` shows formatting chan
 
 ## Self-Review Notes
 
-- Spec coverage: Tasks cover missing path fail-closed behavior, deterministic path tests, TOCTOU documentation, examples, roadmap, and agent memory.
+- Spec coverage: Tasks cover missing path fail-closed behavior for constraint-evaluated allow rules, deterministic path tests, TOCTOU documentation, examples, roadmap, and agent memory.
 - Placeholder scan: No task uses placeholder language or incomplete instructions.
 - Type consistency: All function names, fields, and config keys match the existing Go code and YAML schema: `policy.Evaluate`, `policy.VerdictDeny`, `constraints.path`, `within`, `resolve_within`, and `arguments.path`.

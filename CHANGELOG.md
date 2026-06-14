@@ -14,6 +14,7 @@
 - **Operational secrets runbook** — token storage and rotation guidance now lives in `docs/OPERATIONAL_SECRETS.md`.
 
 ### Changed
+- Constraint-evaluated `allow: "true"` path rules now fail closed when `arguments.path` is missing, instead of treating the path constraint as not applicable.
 - Policy examples now treat `servers.<name>.command` as the source of the stdio server command instead of requiring the fallback `-- <server-command>` form.
 - Web API token checks now compare SHA-256 digests with constant-time comparison.
 - The multiplexing model is now explicit: one active selected MCP server per mcpgate process.

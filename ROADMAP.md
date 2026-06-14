@@ -26,7 +26,7 @@ This roadmap tracks the next practical work for mcpgate after v1.1.0. GitHub iss
 | Priority | Item | Outcome |
 |---|---|---|
 | Done | Symlink-aware path enforcement option | Operators can opt into realpath checks when filesystem access is available |
-| P0 | TOCTOU guidance and tests | Path checks document the boundary between policy-time validation and child-process I/O |
+| Done | TOCTOU guidance and tests | Path checks document the boundary between policy-time validation and child-process I/O, and missing path arguments fail closed for constraint-evaluated `allow: "true"` rules |
 | Done | Structured constraints beyond `path` | Policy can constrain enum/string/numeric arguments without custom tool wrappers |
 | Done | Constant-time token comparison | Web authentication avoids token-comparison side-channel concerns even for localhost-only deployment |
 | Done | Audit retention and rotation guidance | Long-running deployments have an operational story for SQLite growth |
@@ -42,4 +42,4 @@ This roadmap tracks the next practical work for mcpgate after v1.1.0. GitHub iss
 
 ## Blocked / needs explicit approval
 
-- Rotate any existing dashboard or Mission Control API token that has appeared in shared project instructions. This is intentionally not performed from this repo because secret rotation changes live infrastructure credentials and must be completed through the owning secret-management workflow.
+- No blocked repository-local roadmap items.

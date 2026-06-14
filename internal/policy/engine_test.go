@@ -88,6 +88,32 @@ func TestWithinDotDot(t *testing.T) {
 	}
 }
 
+func TestPathConstraintMissingPathDenies(t *testing.T) {
+	c := cfg()
+	got := policy.Evaluate("fs", "tools/call", "read_file", map[string]string{}, c)
+	if got != policy.VerdictDeny {
+		t.Errorf("missing path under path constraint: got %v, want deny", got)
+	}
+}
+
+func TestWithinRelativePathDenies(t *testing.T) {
+	c := cfg()
+	got := policy.Evaluate("fs", "tools/call", "read_file",
+		map[string]string{"path": "home/safe/a.txt"}, c)
+	if got != policy.VerdictDeny {
+		t.Errorf("relative path: got %v, want deny", got)
+	}
+}
+
+func TestWithinCleanPathRequired(t *testing.T) {
+	c := cfg()
+	got := policy.Evaluate("fs", "tools/call", "read_file",
+		map[string]string{"path": "/home/safe//a.txt"}, c)
+	if got != policy.VerdictDeny {
+		t.Errorf("non-clean path: got %v, want deny", got)
+	}
+}
+
 func TestSamplingAllow(t *testing.T) {
 	cfg := &policy.Config{
 		Version: 1,
@@ -265,6 +291,23 @@ func TestResolveWithinPathConstraint(t *testing.T) {
 			},
 		},
 	}
+	cfgMissingRoot := &policy.Config{
+		Version: 1,
+		Mode:    "enforce",
+		Servers: map[string]policy.ServerConfig{
+			"fs": {
+				Command: []string{"echo"},
+				Tools: map[string]policy.TargetRule{
+					"read_file": {
+						Allow: policy.AllowTrue,
+						Constraints: &policy.Constraints{
+							Path: &policy.PathConstraint{ResolveWithin: []string{filepath.Join(dir, "missing-root")}},
+						},
+					},
+				},
+			},
+		},
+	}
 
 	cases := []struct {
 		name string
@@ -285,4 +328,11 @@ func TestResolveWithinPathConstraint(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("missing root fails closed", func(t *testing.T) {
+		got := policy.Evaluate("fs", "tools/call", "read_file", map[string]string{"path": safeTarget}, cfgMissingRoot)
+		if got != policy.VerdictDeny {
+			t.Fatalf("Evaluate = %v, want %v", got, policy.VerdictDeny)
+		}
+	})
 }

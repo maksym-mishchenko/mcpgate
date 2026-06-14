@@ -23,9 +23,9 @@
 - Modify: `CHANGELOG.md`
   - Owns operator-facing release notes. Record the missing-path fail-closed behavior change under `## Unreleased`.
 - Modify: `examples/simple-policy.yaml`
-  - Owns the stdio filesystem example. Show `resolve_within` for existing read/list flows and `within` for ask-gated writes.
+  - Owns the stdio filesystem example. Show `resolve_within` for existing read/list flows and clarify that ask-gated writes do not evaluate constraints; approvers must inspect proposed paths manually.
 - Modify: `examples/http-policy.yaml`
-  - Owns the HTTP transport policy example. Add comments that explain why read uses both `within` and `resolve_within`, while write uses `within`.
+  - Owns the HTTP transport policy example. Add comments that explain why read uses both `within` and `resolve_within`, while ask-gated writes rely on manual approver inspection because constraints are not evaluated for ask prompts.
 - Modify: `ROADMAP.md`
   - Owns local backlog state. Mark the v1.3 TOCTOU item done after tests/docs pass.
 - Modify: `.agent/STATE.md`
@@ -286,8 +286,8 @@ Change `write_file` comment to:
 
 ```yaml
       # write_file: requires human approval before executing.
-      # Use within rather than resolve_within because a newly-created file may
-      # not exist at policy-check time.
+      # Constraints are evaluated for allow rules, not ask prompts; the
+      # approver must inspect the proposed path before allowing the call.
 ```
 
 Change `list_directory` to:

@@ -116,6 +116,46 @@ func TestRecent(t *testing.T) {
 	}
 }
 
+func TestApprovalSourceRoundTrip(t *testing.T) {
+	s, cleanup := tempDB(t)
+	defer cleanup()
+
+	if err := s.Append(audit.Entry{
+		Method:         "tools/call",
+		Server:         "fs",
+		Name:           "write_file",
+		Verdict:        "DENY",
+		Reason:         "timeout",
+		ApprovalSource: "timeout",
+	}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	entries, err := s.Recent(1)
+	if err != nil {
+		t.Fatalf("recent: %v", err)
+	}
+	if got := entries[0].ApprovalSource; got != "timeout" {
+		t.Fatalf("ApprovalSource = %q, want timeout", got)
+	}
+
+	var exported bytes.Buffer
+	if err := s.Export(&exported); err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	if !strings.Contains(exported.String(), `"approval_source":"timeout"`) {
+		t.Fatalf("export missing approval_source: %s", exported.String())
+	}
+
+	ok, err := audit.VerifyFile(&exported, nil)
+	if err != nil {
+		t.Fatalf("verify export: %v", err)
+	}
+	if !ok {
+		t.Fatal("export with approval_source should verify")
+	}
+}
+
 func TestHMACKeyedChain(t *testing.T) {
 	dir := t.TempDir()
 	key := make([]byte, 32)

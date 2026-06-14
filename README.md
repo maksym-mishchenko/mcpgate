@@ -21,8 +21,8 @@ The fastest way to understand mcpgate is the showcase flow in [`docs/SHOWCASE.md
 
 - Deny-by-default YAML policy for MCP tools, resources, prompts, and reverse-channel sampling.
 - Write-ahead SQLite audit: calls are logged before forwarding, and audit failure denies the call.
-- Local browser dashboard for pending approvals and live audit events.
-- HMAC-verifiable audit chain export for incident review.
+- Local browser dashboard for pending approvals and live audit events, including approval-source filtering.
+- HMAC-verifiable audit chain export for incident review, including approval source metadata.
 - Deterministic prompt-injection/tool-poisoning scanner with optional block-on-warn mode.
 - Stdio and HTTP server transports with optional HTTP egress allowlisting.
 - One active selected MCP server per gateway process for explicit client routing and audit attribution.
@@ -246,7 +246,7 @@ curl -H "Authorization: Bearer $MCPGATE_TOKEN" http://127.0.0.1:18789/pending
 
 ### `GET /audit`
 
-Returns the latest 100 audit entries from SQLite, newest first.
+Returns the latest 100 audit entries from SQLite, newest first. Approval-related rows include `approval_source` so operators can distinguish policy decisions, human UI decisions, approval timeouts, and heuristic blocks.
 
 ```bash
 curl -H "Authorization: Bearer $MCPGATE_TOKEN" http://127.0.0.1:18789/audit
@@ -288,7 +288,7 @@ Events are broadcast as `event: <name>\ndata: <json>\n\n`.
 - **Token authentication:** All web API endpoints require a matching Bearer token. There is no guest mode.
 - **Anti-DNS-rebinding:** The `Host` header is checked on every request. Only `localhost` and `127.0.0.1` are accepted, regardless of the token.
 - **Deny by default:** Unmatched calls return `DENY` in enforce mode. You must explicitly opt in to allow a tool.
-- **Interactive approval:** `ask` calls are parked for approval in the local UI and denied automatically on timeout.
+- **Interactive approval:** `ask` calls are parked for approval in the local UI and denied automatically on timeout; audit rows record whether the final decision came from policy, a human, timeout, or heuristic blocking.
 - **Prompt-poisoning detection:** Deterministic scanner warnings are signed into the audit chain and can be escalated with `heuristics.block_on_warn`.
 - **Process isolation:** stdio MCP servers are spawned with process-group isolation so `SIGTERM`/`SIGKILL` reaches the whole subprocess tree, not just the direct child.
 - **One active server per process:** multiplexing is explicit at the MCP client level; each mcpgate process fronts one selected server for simpler routing and audit attribution.

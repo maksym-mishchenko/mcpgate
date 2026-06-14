@@ -12,18 +12,19 @@ type Warning struct {
 
 // Entry is a single audit log record.
 type Entry struct {
-	ID       int64
-	Seq      int64
-	Method   string
-	Server   string
-	Name     string
-	Args     string // JSON
-	Verdict  string
-	Reason   string
-	Ts       time.Time
-	Hash     string
-	Status   string    // "PENDING" | "DONE"
-	Warnings []Warning // heuristic matches; empty for most rows
+	ID             int64
+	Seq            int64
+	Method         string
+	Server         string
+	Name           string
+	Args           string // JSON
+	Verdict        string
+	Reason         string
+	ApprovalSource string // "policy" | "human" | "timeout" | "heuristic" | ""
+	Ts             time.Time
+	Hash           string
+	Status         string    // "PENDING" | "DONE"
+	Warnings       []Warning // heuristic matches; empty for most rows
 }
 
 // AuditStore is the interface for appending and verifying audit entries.

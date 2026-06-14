@@ -84,6 +84,11 @@ func migrate(db *sql.DB) error {
 	if err != nil && !isSQLiteAlreadyExists(err) {
 		return err
 	}
+	// v1.4: explicit approval source for filtering/exporting governance decisions.
+	_, err = db.Exec(`ALTER TABLE audit_log ADD COLUMN approval_source TEXT NOT NULL DEFAULT ""`)
+	if err != nil && !isSQLiteAlreadyExists(err) {
+		return err
+	}
 	return nil
 }
 
@@ -161,6 +166,9 @@ func (s *SQLiteStore) Append(e Entry) error {
 		"seq":     seq,
 		"ts":      e.Ts.Unix(),
 	}
+	if e.ApprovalSource != "" {
+		fields["approval_source"] = e.ApprovalSource
+	}
 	if warningsJSON != "" {
 		fields["warnings"] = warningsJSON
 	}
@@ -178,9 +186,9 @@ func (s *SQLiteStore) Append(e Entry) error {
 	}
 
 	_, err = s.db.Exec(
-		`INSERT INTO audit_log(seq,method,server,name,args,verdict,reason,ts_unix,hash,status,hmac_sig,warnings)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-		seq, e.Method, e.Server, e.Name, e.Args, e.Verdict, e.Reason, e.Ts.Unix(), hashHex, "DONE", hmacSig, warningsJSON,
+		`INSERT INTO audit_log(seq,method,server,name,args,verdict,reason,ts_unix,hash,status,hmac_sig,warnings,approval_source)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		seq, e.Method, e.Server, e.Name, e.Args, e.Verdict, e.Reason, e.Ts.Unix(), hashHex, "DONE", hmacSig, warningsJSON, e.ApprovalSource,
 	)
 	return err
 }
@@ -200,7 +208,7 @@ func (s *SQLiteStore) lastHashAndSeq() (string, int64, error) {
 // VerifyChain recomputes every hash and returns false if any mismatch is found.
 func (s *SQLiteStore) VerifyChain() (bool, error) {
 	rows, err := s.db.Query(
-		`SELECT seq,method,server,name,args,verdict,reason,ts_unix,hash,hmac_sig,warnings FROM audit_log ORDER BY seq`)
+		`SELECT seq,method,server,name,args,verdict,reason,ts_unix,hash,hmac_sig,warnings,approval_source FROM audit_log ORDER BY seq`)
 	if err != nil {
 		return false, err
 	}
@@ -209,9 +217,9 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 	prevHash := ""
 	for rows.Next() {
 		var seq, ts int64
-		var method, server, name, args, verdict, reason, storedHash, storedHMACsig, warnings string
+		var method, server, name, args, verdict, reason, storedHash, storedHMACsig, warnings, approvalSource string
 		if err := rows.Scan(&seq, &method, &server, &name, &args,
-			&verdict, &reason, &ts, &storedHash, &storedHMACsig, &warnings); err != nil {
+			&verdict, &reason, &ts, &storedHash, &storedHMACsig, &warnings, &approvalSource); err != nil {
 			return false, err
 		}
 		fields := map[string]any{
@@ -221,6 +229,9 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 		}
 		if warnings != "" {
 			fields["warnings"] = warnings
+		}
+		if approvalSource != "" {
+			fields["approval_source"] = approvalSource
 		}
 		entryBytes := canonicalJSON(fields)
 		combined := append([]byte(prevHash), entryBytes...)
@@ -247,7 +258,7 @@ func (s *SQLiteStore) VerifyChain() (bool, error) {
 // Export writes all audit entries as JSON Lines to w (oldest first).
 func (s *SQLiteStore) Export(w io.Writer) error {
 	rows, err := s.db.Query(
-		`SELECT seq,method,server,name,args,verdict,reason,ts_unix,hash,hmac_sig,warnings FROM audit_log ORDER BY seq`)
+		`SELECT seq,method,server,name,args,verdict,reason,ts_unix,hash,hmac_sig,warnings,approval_source FROM audit_log ORDER BY seq`)
 	if err != nil {
 		return err
 	}
@@ -257,8 +268,8 @@ func (s *SQLiteStore) Export(w io.Writer) error {
 	enc.SetEscapeHTML(false)
 	for rows.Next() {
 		var seq, ts int64
-		var method, server, name, args, verdict, reason, hash, hmacSig, warnings string
-		if err := rows.Scan(&seq, &method, &server, &name, &args, &verdict, &reason, &ts, &hash, &hmacSig, &warnings); err != nil {
+		var method, server, name, args, verdict, reason, hash, hmacSig, warnings, approvalSource string
+		if err := rows.Scan(&seq, &method, &server, &name, &args, &verdict, &reason, &ts, &hash, &hmacSig, &warnings, &approvalSource); err != nil {
 			return err
 		}
 		obj := map[string]any{
@@ -276,6 +287,9 @@ func (s *SQLiteStore) Export(w io.Writer) error {
 		if warnings != "" {
 			obj["warnings"] = warnings
 		}
+		if approvalSource != "" {
+			obj["approval_source"] = approvalSource
+		}
 		if err := enc.Encode(obj); err != nil {
 			return err
 		}
@@ -291,7 +305,7 @@ func (s *SQLiteStore) GetDB() *sql.DB { return s.db }
 // Recent returns the n most recent audit entries, newest first.
 func (s *SQLiteStore) Recent(n int) ([]Entry, error) {
 	rows, err := s.db.Query(
-		`SELECT id, seq, method, server, name, args, verdict, reason, ts_unix, warnings FROM audit_log
+		`SELECT id, seq, method, server, name, args, verdict, reason, ts_unix, warnings, approval_source FROM audit_log
 		 ORDER BY seq DESC LIMIT ?`, n)
 	if err != nil {
 		return nil, err
@@ -303,11 +317,13 @@ func (s *SQLiteStore) Recent(n int) ([]Entry, error) {
 		var e Entry
 		var ts int64
 		var warnings string
+		var approvalSource string
 		if err := rows.Scan(&e.ID, &e.Seq, &e.Method, &e.Server, &e.Name,
-			&e.Args, &e.Verdict, &e.Reason, &ts, &warnings); err != nil {
+			&e.Args, &e.Verdict, &e.Reason, &ts, &warnings, &approvalSource); err != nil {
 			return nil, err
 		}
 		e.Ts = time.Unix(ts, 0).UTC()
+		e.ApprovalSource = approvalSource
 		if warnings != "" {
 			json.Unmarshal([]byte(warnings), &e.Warnings) //nolint:errcheck
 		}

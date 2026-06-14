@@ -60,6 +60,8 @@ mcpgate uses a **write-ahead audit** strategy: the verdict is written to the SQL
 
 This means the audit log is always authoritative: every call that reached the MCP server has a corresponding log entry. There is no window where a call is forwarded but not recorded.
 
+Approval-sensitive audit rows include an `approval_source` value (`policy`, `human`, `timeout`, or `heuristic`) so exports and the local dashboard can separate manual UI decisions from automatic timeout denials and policy-only decisions.
+
 The audit store interface (`audit.AuditStore`) is injected, making it possible to test fail-closed behaviour with a failing stub — the test suite does this.
 
 For retention and rotation, export and verify audit chains before archival. Do not delete rows in place; see `docs/AUDIT_RETENTION.md`.

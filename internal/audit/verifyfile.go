@@ -14,17 +14,18 @@ import (
 
 // ExportedRow is the shape of each line in a JSON Lines export.
 type ExportedRow struct {
-	Seq      int64  `json:"seq"`
-	Method   string `json:"method"`
-	Server   string `json:"server"`
-	Name     string `json:"name"`
-	Args     string `json:"args"`
-	Verdict  string `json:"verdict"`
-	Reason   string `json:"reason"`
-	Ts       string `json:"ts"` // RFC3339
-	Hash     string `json:"hash"`
-	HMACsig  string `json:"hmac_sig"`
-	Warnings string `json:"warnings,omitempty"`
+	Seq            int64  `json:"seq"`
+	Method         string `json:"method"`
+	Server         string `json:"server"`
+	Name           string `json:"name"`
+	Args           string `json:"args"`
+	Verdict        string `json:"verdict"`
+	Reason         string `json:"reason"`
+	ApprovalSource string `json:"approval_source,omitempty"`
+	Ts             string `json:"ts"` // RFC3339
+	Hash           string `json:"hash"`
+	HMACsig        string `json:"hmac_sig"`
+	Warnings       string `json:"warnings,omitempty"`
 }
 
 // VerifyFile reads JSON Lines from r and verifies the hash chain.
@@ -66,6 +67,9 @@ func VerifyFile(r io.Reader, key []byte) (bool, error) {
 		}
 		if row.Warnings != "" {
 			fields["warnings"] = row.Warnings
+		}
+		if row.ApprovalSource != "" {
+			fields["approval_source"] = row.ApprovalSource
 		}
 		entryBytes := canonicalJSON(fields)
 		combined := append([]byte(prevHash), entryBytes...)

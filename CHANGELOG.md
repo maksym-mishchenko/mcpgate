@@ -12,6 +12,7 @@
 - **Showcase dashboard screenshot** — README and showcase docs now include a safe static dashboard capture.
 - **Showcase flow GIF** — docs include a compact safe demo recording asset for portfolio use.
 - **Operational secrets runbook** — token storage and rotation guidance now lives in `docs/OPERATIONAL_SECRETS.md`.
+- **Approval source audit metadata** — audit rows and JSON Lines exports now include `approval_source` for policy, human, timeout, and heuristic decisions, and the dashboard can filter by source.
 
 ### Changed
 - Constraint-evaluated `allow: "true"` path rules now fail closed when `arguments.path` is missing, instead of treating the path constraint as not applicable.

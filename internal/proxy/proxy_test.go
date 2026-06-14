@@ -272,6 +272,9 @@ func TestAskParksAndResolvesAllow(t *testing.T) {
 	if fa.entries[0].Verdict != "ALLOW" {
 		t.Errorf("verdict = %q, want ALLOW", fa.entries[0].Verdict)
 	}
+	if fa.entries[0].ApprovalSource != "human" {
+		t.Errorf("approval source = %q, want human", fa.entries[0].ApprovalSource)
+	}
 	if !bytes.Contains(agentOut.Bytes(), []byte("true")) {
 		t.Error("agent did not receive server response after approval")
 	}
@@ -312,6 +315,9 @@ func TestAskTimeoutDenies(t *testing.T) {
 	}
 	if fa.entries[0].Verdict != "DENY" {
 		t.Errorf("verdict = %q, want DENY", fa.entries[0].Verdict)
+	}
+	if fa.entries[0].ApprovalSource != "timeout" {
+		t.Errorf("approval source = %q, want timeout", fa.entries[0].ApprovalSource)
 	}
 	if !bytes.Contains(agentOut.Bytes(), []byte("error")) {
 		t.Error("expected JSON-RPC error after timeout")
@@ -392,6 +398,9 @@ func TestSamplingAllowedRelaysToAgent(t *testing.T) {
 	var foundAllow bool
 	for _, e := range fa.entries {
 		if e.Method == "sampling/createMessage" && e.Verdict == "ALLOW" {
+			if e.ApprovalSource != "policy" {
+				t.Errorf("sampling approval source = %q, want policy", e.ApprovalSource)
+			}
 			foundAllow = true
 		}
 	}
@@ -454,6 +463,9 @@ func TestSamplingDeniedSendsServerError(t *testing.T) {
 	var foundDeny bool
 	for _, e := range fa.entries {
 		if e.Method == "sampling/createMessage" && e.Verdict == "DENY" {
+			if e.ApprovalSource != "policy" {
+				t.Errorf("sampling approval source = %q, want policy", e.ApprovalSource)
+			}
 			foundDeny = true
 		}
 	}

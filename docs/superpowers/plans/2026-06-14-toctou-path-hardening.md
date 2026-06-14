@@ -324,14 +324,9 @@ Change the `write_file` block to:
 
 ```yaml
       write_file:
+        # Constraints are evaluated for allow rules, not ask prompts; the
+        # approver must inspect the proposed path and mode before allowing.
         allow: ask
-        constraints:
-          path:
-            # Use within for writes because a new target may not exist yet.
-            within: ["/srv/safe"]
-          fields:
-            mode:
-              one_of: ["create", "overwrite"]
 ```
 
 - [ ] **Step 6: Review docs for stale missing-path language**

@@ -31,13 +31,10 @@ servers:
             resolve_within: ["/home/user/safe"]
 
       # write_file: requires human approval before executing.
-      # Use within rather than resolve_within because a newly-created file may
-      # not exist at policy-check time.
+      # Constraints are evaluated for allow rules, not ask prompts; the
+      # approver must inspect the proposed path before allowing the call.
       write_file:
         allow: ask
-        constraints:
-          path:
-            within: ["/home/user/safe"]
 
       # list_directory: allowed for existing directories under safe root.
       list_directory:

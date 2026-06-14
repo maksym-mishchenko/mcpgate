@@ -86,10 +86,9 @@ servers:
           path:
             within: ["/home/user/safe"]
       write_file:
+        # ask prompts do not evaluate constraints; approvers must inspect
+        # the proposed path before allowing the call.
         allow: ask
-        constraints:
-          path:
-            within: ["/home/user/safe"]
       delete_file:
         allow: "false"
     resources:
@@ -184,7 +183,7 @@ heuristics:
 |-------|---------|
 | `"true"` | Allow (after constraint check) |
 | `"false"` | Deny immediately |
-| `ask` | Interactive approval through the local browser UI; timeout resolves as deny |
+| `ask` | Interactive approval through the local browser UI; timeout resolves as deny; constraints are not evaluated for `ask` prompts |
 
 **Constraints:**
 

@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## [Unreleased]
+
+## [1.4.0] - 2026-06-14 — "Govern the gateway"
 
 ### Added
 - **Deterministic configured-server selection** — `--server` selects a named policy server and is required when multiple servers are configured, avoiding accidental map-order selection.

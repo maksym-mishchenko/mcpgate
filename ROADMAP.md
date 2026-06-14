@@ -1,11 +1,11 @@
 # Roadmap
 
-This roadmap tracks the next practical work for mcpgate after v1.1.0. GitHub issues can mirror these items when work starts, but this file is the repository-local backlog source.
+This roadmap tracks the next practical work for mcpgate after v1.4.0. GitHub issues can mirror these items when work starts, but this file is the repository-local backlog source.
 
 ## Current baseline
 
-- Latest release: v1.1.0, "See the poison".
-- Core security invariants are implemented: deny-by-default policy, write-ahead SQLite audit, fail-closed forwarding, HMAC-verifiable audit exports, interactive approval, reverse-channel gating, deterministic heuristic warnings, and deterministic configured-server selection.
+- Latest release: v1.4.0, "Govern the gateway".
+- Core security invariants are implemented: deny-by-default policy, write-ahead SQLite audit, fail-closed forwarding, HMAC-verifiable audit exports, interactive approval, reverse-channel gating, deterministic heuristic warnings, deterministic configured-server selection, structured constraints, symlink-aware path checks, approval-source audit metadata, and conservative audit-based policy discovery.
 - Local worktree note: Go commands in this Copilot worktree may need `-buildvcs=false` because VCS stamping can fail in the generated worktree path.
 
 ## v1.2.0 — Documentation and operator hardening

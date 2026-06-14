@@ -18,12 +18,12 @@ Last updated: 2026-06-15 by copilot
 - Added `mcpgate discover` for conservative observe-mode policy drafting from verified audit exports.
 - Added audit review handoff documentation with export, verify, review, and discovery examples.
 - Prepared v1.4.0 release notes and roadmap baseline.
+- Completed v1.4.1 security/reliability hardening: dashboard XSS fix, runtime audit HMAC signing, strict keyed verification, HTTP/proxy bounds, and typed policy arguments.
 
 ## In progress
-- v1.4.1 security/reliability hardening: dashboard XSS fix, runtime audit HMAC signing, strict keyed verification, HTTP/proxy bounds, and typed policy arguments.
 
 ## Known issues
 - Plain Go VCS stamping can fail in generated Copilot worktrees; use `-buildvcs=false` locally if needed.
 
 ## Next steps
-- Finish v1.4.1 hardening PR for issue #17.
+- Publish v1.4.1 release after release metadata PR merges.

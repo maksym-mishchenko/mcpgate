@@ -1,21 +1,21 @@
 # Roadmap
 
-This roadmap tracks the next practical work for mcpgate after v1.4.0. GitHub issues can mirror these items when work starts, but this file is the repository-local backlog source.
+This roadmap tracks future practical work for mcpgate after the completed v1.4.1 showcase baseline. GitHub issues can mirror these items when work starts, but this file is the repository-local backlog source.
 
 ## Current baseline
 
-- Latest release: v1.4.0, "Govern the gateway".
-- Core security invariants are implemented: deny-by-default policy, write-ahead SQLite audit, fail-closed forwarding, HMAC-verifiable audit exports, interactive approval, reverse-channel gating, deterministic heuristic warnings, deterministic configured-server selection, structured constraints, symlink-aware path checks, approval-source audit metadata, and conservative audit-based policy discovery.
+- Latest release: v1.4.1, "Harden the gate".
+- Core security invariants are implemented: deny-by-default policy, write-ahead SQLite audit, fail-closed forwarding, runtime HMAC signing, strict keyed audit export verification, interactive approval, reverse-channel gating, deterministic heuristic warnings, deterministic configured-server selection, structured typed-JSON constraints, symlink-aware path checks, approval-source audit metadata, bounded remote/server response paths, and conservative audit-based policy discovery.
 - Local worktree note: Go commands in this Copilot worktree may need `-buildvcs=false` because VCS stamping can fail in the generated worktree path.
 
 ## v1.4.1 — Security and reliability hardening
 
 | Priority | Item | Outcome |
 |---|---|---|
-| In progress | Dashboard approval XSS fix | Pending-call IDs are treated as data, not inline JavaScript |
-| In progress | Runtime audit HMAC signing | Normal gateway runs can produce signed audit rows and keyed verification requires signatures |
-| In progress | Transport and server response bounds | Remote MCP calls cannot hang forever or return unbounded response bodies |
-| In progress | Typed policy arguments | Structured constraints evaluate JSON values without string-flattening surprises |
+| Done | Dashboard approval XSS fix | Pending-call IDs are treated as data, not inline JavaScript |
+| Done | Runtime audit HMAC signing | Normal gateway runs can produce signed audit rows and keyed verification requires signatures |
+| Done | Transport and server response bounds | Remote MCP calls cannot hang forever or return unbounded response bodies |
+| Done | Typed policy arguments | Structured constraints evaluate JSON values without string-flattening surprises |
 
 ## v1.2.0 — Documentation and operator hardening
 

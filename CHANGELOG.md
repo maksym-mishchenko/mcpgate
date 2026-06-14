@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-06-15 — "Harden the gate"
+
 ### Added
 - **Runtime audit signing** — `--audit-key` / `MCPGATE_AUDIT_KEY_FILE` signs normal gateway audit rows with the existing HMAC chain support.
 - **File-backed dashboard tokens** — `--token-file` / `MCPGATE_TOKEN_FILE` lets operators avoid passing dashboard tokens on the command line.

@@ -8,14 +8,14 @@ This is not a hypothetical risk. Prompt injection attacks, overly-capable system
 
 ## Solution
 
-mcpgate is an **interposing stdio proxy**. It sits between the agent and the MCP server and enforces a declarative policy on every gated call. The agent never communicates directly with the MCP server; all traffic flows through the gateway.
+mcpgate is an **interposing MCP gateway**. It sits between the agent and the MCP server and enforces a declarative policy on every gated call. The agent never communicates directly with the MCP server; all traffic flows through the gateway over stdio on the agent side and stdio or HTTP on the server side.
 
 The key design choices are:
 
 1. **Deny by default, explicit allowlist** — operators must opt in to every tool they want available.
 2. **Write-ahead audit** — calls are logged before they are forwarded; audit failure blocks the call.
 3. **Fail-closed everywhere** — any unexpected condition (audit error, unknown verdict, missing server config) results in a deny, never an allow.
-4. **Interposition, not wrapping** — mcpgate does not re-implement MCP. It passes non-gated traffic through untouched, only intercepting the two methods that have side effects: `tools/call` and `resources/read`.
+4. **Interposition, not wrapping** — mcpgate does not re-implement MCP. It passes non-gated traffic through untouched and intercepts policy-sensitive methods: `tools/call`, `resources/read`, `prompts/get`, and reverse-channel `sampling/createMessage`.
 
 ## Core invariants
 
@@ -25,15 +25,17 @@ These invariants are maintained throughout the codebase and tested explicitly:
 |-----------|---------------|
 | A call is never forwarded without a prior audit entry | `proxy.handleGated` — audit write precedes `ServerTransport.Send` |
 | Audit write failure → deny | `proxy.handleGated` — `sendError` on `store.Append` error |
-| Unknown verdict → deny in enforce mode | `proxy.handleGated` — `VerdictUnknown` and `VerdictAsk` → deny |
+| Unknown/ask verdict → human approval or deny | `proxy.handleGated` — `VerdictUnknown` and `VerdictAsk` park for approval in enforce mode, then deny on timeout |
+| Reverse-channel requests are gated | `proxy.recvServerResponse` routes server requests to `handleServerRequest` before relaying to the agent |
 | Non-localhost Host header → 403 | `web.auth` middleware |
 | Child exit drains all pending approvals with deny | `main.go` goroutine watching `mgr.Done()` |
 | Process group kill on shutdown | `child.Manager.Stop` — `SIGTERM` to `-pgid`, then `SIGKILL` |
+| Heuristic findings are tamper-evident | `proxy.handleGated` and `handleServerRequest` persist warnings inside signed audit entries |
 
 ## Package breakdown
 
 ```
-cmd/mcpgate/    Entry point. Parses flags, wires dependencies, runs proxy + web server.
+cmd/mcpgate/    Entry point. Parses flags/subcommands, wires dependencies, runs proxy + web server.
                 Nothing interesting lives here by design.
 
 internal/policy/
@@ -43,7 +45,7 @@ internal/policy/
                 Easily unit-tested.
 
 internal/proxy/
-  proxy.go      The core loop: recv from agent, gate check, forward or deny.
+  proxy.go      The core single-server loop: recv from agent, gate check, forward or deny.
                 Depends on Transport (not stdio directly) and AuditStore (not SQLite directly).
 
 internal/audit/
@@ -65,13 +67,19 @@ internal/codec/
 internal/transport/
   transport.go  Transport interface (Recv/Send/Close).
   stdio.go      Wraps an io.Reader + io.Writer pair with a codec.Reader/Writer.
+  http_client.go POSTs JSON-RPC frames to remote HTTP MCP endpoints with optional
+                egress hostname allowlisting.
 
 internal/web/
-  server.go     /health, /approve, /events. Auth middleware checks token + Host.
+  server.go     /health, /approve, /pending, /audit, /events. Auth middleware checks token + Host.
                 /events uses Server-Sent Events; clients are tracked with a channel map.
 
 internal/jsonrpc/
   message.go    Minimal JSON-RPC 2.0 message type. Carries Raw []byte for pass-through.
+
+internal/scanner/
+  scanner.go    Versioned deterministic signatures for injection and exfiltration
+                patterns. Warnings are advisory unless block_on_warn is enabled.
 ```
 
 ## Data flow
@@ -96,7 +104,7 @@ proxy.Run() ---- loop -----------------------------------------------+
   |              +-- policy.Evaluate(server, method, name, args, cfg)|
   |              |     returns: ALLOW | DENY | ASK | UNKNOWN         |
   |              |                                                   |
-  |              +-- mode=enforce + (ASK|UNKNOWN) --> DENY           |
+  |              +-- mode=enforce + (ASK|UNKNOWN) --> park approval  |
   |              |                                                   |
   |              +-- audit.Append(entry)   <-- WRITE-AHEAD           |
   |              |     error --> sendError (deny)                    |
@@ -117,24 +125,24 @@ transport.Stdio (server-side)
 MCP Server (child process, own process group)
 ```
 
-## v0.2.0
+## Current limitations and roadmap cuts
 
-- Interactive approval: `ask` verdicts park the call and push a card to the browser UI
-- Browser dashboard at `GET /` — dark terminal theme, approval cards + live audit feed
-- `/pending` endpoint returns current parked calls (for reconnecting clients)
-- `/audit` endpoint returns last 100 entries from SQLite
-- `--approval-timeout` flag (default 30s); structured `slog` verdict logging
-
-## What is NOT in v0.1
-
-These are deliberate scope cuts, not oversights:
+These are deliberate scope cuts, not oversights. See `ROADMAP.md` for planned sequencing.
 
 | Missing feature | Rationale |
 |-----------------|-----------|
-| Interactive approval UI | `ask` verdicts are deny today. A browser/TUI approval flow is planned for v0.2. The `approval.Coordinator` and `/approve` endpoint are the infrastructure hooks. |
-| Multi-server support | Only one MCP server per mcpgate instance. Multiple servers need multiple mcpgate processes (or a future multiplexer). |
 | TLS on the web API | The web API binds only to `127.0.0.1`. Adding TLS is straightforward but adds operational complexity (certificate management) that is out of scope for a local tool. |
-| Symlink resolution in path constraints | Requires disk I/O in the policy engine, which would make it impure and harder to test. Defence-in-depth: the OS and MCP server are expected to enforce their own boundaries. |
-| Structured argument constraints beyond `path` | The constraint system is extensible (`Constraints` struct), but only `path` is implemented. Other field types (numeric ranges, enum values) are future work. |
-| Audit log rotation / retention policy | The SQLite file grows indefinitely. Production deployments should configure external log rotation or use a different `AuditStore` implementation. |
 | Authentication of the child process | mcpgate trusts its own child process. A compromised MCP server binary could bypass policy by speaking JSON-RPC directly. This is a deployment concern, not a gateway concern. |
+
+## Multiplexing decision
+
+mcpgate supports multiple named server definitions in one policy file, but each process fronts exactly one selected MCP server. This is intentional for the showcase and current security model.
+
+The supported deployment model is:
+
+1. Define each server under `servers.<name>` in policy.
+2. Start one mcpgate process per client MCP entry.
+3. Pass `--server <name>` whenever the policy contains more than one server.
+4. Attribute every audit row to the selected server name.
+
+Full runtime multiplexing is not implemented because MCP clients already route by server entry. Adding another routing layer inside mcpgate would require synthetic tool names or protocol-level routing metadata, both of which make audit attribution and least-privilege policy harder to reason about. The unused internal router abstraction was removed so the source matches the supported model.

@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Deterministic configured-server selection** — `--server` selects a named policy server and is required when multiple servers are configured, avoiding accidental map-order selection.
+- **Showcase documentation** — demo script, HTTP policy example, release checklist, and portfolio-oriented README sections.
+- **Dashboard audit filtering** — local UI filters audit rows by verdict, method, server, and warning presence, with expandable warning details.
+- **Audit retention guidance** — documented export/verify-first rotation workflow for long-running deployments.
+- **Structured argument constraints** — policy can constrain non-path fields with exact values, enums, anchored regexes, numeric ranges, and booleans.
+- **Symlink-aware path checks** — optional `path.resolve_within` resolves existing paths and roots before allowing filesystem operations.
+- **Showcase dashboard screenshot** — README and showcase docs now include a safe static dashboard capture.
+- **Showcase flow GIF** — docs include a compact safe demo recording asset for portfolio use.
+- **Operational secrets runbook** — token storage and rotation guidance now lives in `docs/OPERATIONAL_SECRETS.md`.
+
+### Changed
+- Policy examples now treat `servers.<name>.command` as the source of the stdio server command instead of requiring the fallback `-- <server-command>` form.
+- Web API token checks now compare SHA-256 digests with constant-time comparison.
+- The multiplexing model is now explicit: one active selected MCP server per mcpgate process.
+- The module Go directive now targets the dependency-required Go 1.25 baseline.
+- GoReleaser archive configuration now uses the v2 `formats` key for Windows zip archives.
+
+### Removed
+- Removed the unused internal proxy router abstraction that implied future in-process multiplexing.
+
 ## [1.1.0] - 2026-05-31 — "See the poison"
 
 ### Added

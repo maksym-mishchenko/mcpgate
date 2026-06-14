@@ -55,6 +55,12 @@
   .btn-deny  { background: var(--red);   color: #fff; }
   #no-pending { color: var(--muted); font-size: 12px; }
   #audit-section { overflow: hidden; display: flex; flex-direction: column; }
+  #audit-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  #audit-filters label { color: var(--muted); font-size: 11px; display: flex; align-items: center; gap: 5px; }
+  #audit-filters input, #audit-filters select {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 4px 6px; font-family: var(--font); font-size: 11px;
+  }
   #audit-table-wrap { overflow-y: auto; flex: 1; }
   table { width: 100%; border-collapse: collapse; }
   th { color: var(--muted); text-align: left; padding: 4px 8px; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); }
@@ -66,6 +72,10 @@
   .verdict-deny  { color: var(--red); }
   .verdict-ask   { color: var(--yellow); }
   .warn-badge { color: var(--yellow); font-weight: 600; margin-right: 6px; cursor: help; }
+  .warning-details { display: inline-block; color: var(--yellow); }
+  .warning-details summary { cursor: pointer; list-style: none; }
+  .warning-list { margin-top: 4px; color: var(--text); white-space: normal; max-width: 520px; }
+  .warning-list li { margin: 2px 0; }
 </style>
 </head>
 <body>
@@ -81,6 +91,19 @@
   </section>
   <section id="audit-section">
     <h2>Live Audit Feed</h2>
+    <div id="audit-filters">
+      <label>Verdict
+        <select id="filter-verdict" onchange="renderAuditRows()">
+          <option value="">Any</option>
+          <option value="ALLOW">Allow</option>
+          <option value="DENY">Deny</option>
+          <option value="ASK">Ask</option>
+        </select>
+      </label>
+      <label>Method <input id="filter-method" type="search" placeholder="tools/call" oninput="renderAuditRows()"></label>
+      <label>Server <input id="filter-server" type="search" placeholder="filesystem" oninput="renderAuditRows()"></label>
+      <label><input id="filter-warnings" type="checkbox" onchange="renderAuditRows()"> Warnings only</label>
+    </div>
     <div id="audit-table-wrap">
       <table>
         <thead><tr>
@@ -139,23 +162,58 @@ async function decide(key, verdict) {
 
 // --- audit table ---
 const MAX_ROWS = 200;
+const auditRows = [];
 
-function prependAuditRow(e) {
+function addAuditRow(e) {
+  auditRows.unshift(e);
+  while (auditRows.length > MAX_ROWS) auditRows.pop();
+  renderAuditRows();
+}
+
+function renderAuditRows() {
   const tbody = document.getElementById('audit-body');
+  tbody.innerHTML = '';
+  auditRows.filter(matchesAuditFilters).forEach(e => {
+    tbody.appendChild(auditRowElement(e));
+  });
+}
+
+function matchesAuditFilters(e) {
+  const verdictFilter = document.getElementById('filter-verdict').value;
+  const methodFilter = document.getElementById('filter-method').value.toLowerCase();
+  const serverFilter = document.getElementById('filter-server').value.toLowerCase();
+  const warningsOnly = document.getElementById('filter-warnings').checked;
+  const verdict = (e.Verdict || e.verdict || '').toUpperCase();
+  const method = (e.Method || e.method || '').toLowerCase();
+  const server = (e.Server || e.server || '').toLowerCase();
+  const warnings = e.Warnings || e.warnings || [];
+  return (!verdictFilter || verdict === verdictFilter)
+    && (!methodFilter || method.includes(methodFilter))
+    && (!serverFilter || server.includes(serverFilter))
+    && (!warningsOnly || warnings.length > 0);
+}
+
+function auditRowElement(e) {
   const ts = new Date(e.Ts || e.ts).toLocaleTimeString();
   const verdict = (e.Verdict || e.verdict || '').toUpperCase();
   const vClass = verdict === 'ALLOW' ? 'allow' : verdict === 'DENY' ? 'deny' : 'ask';
   const tr = document.createElement('tr');
   tr.className = vClass;
   const warnings = e.Warnings || e.warnings || [];
-  let warnBadge = '';
-  if (warnings.length) {
-    const ids = warnings.map(w => w.id || w.ID || '').filter(Boolean).join(', ');
-    warnBadge = `<span class="warn-badge" title="${esc(ids)}">⚠ ${warnings.length}</span>`;
-  }
+  const warnBadge = renderWarnings(warnings);
   tr.innerHTML = `<td>${esc(ts)}</td><td>${esc(e.Server||e.server||'')}</td><td>${esc(e.Method||e.method||'')}</td><td>${esc(e.Name||e.name||'')}</td><td class="verdict-${vClass}">${warnBadge}${esc(verdict)}</td><td>${esc(e.Reason||e.reason||'')}</td>`;
-  tbody.insertBefore(tr, tbody.firstChild);
-  while (tbody.rows.length > MAX_ROWS) tbody.deleteRow(tbody.rows.length - 1);
+  return tr;
+}
+
+function renderWarnings(warnings) {
+  if (!warnings.length) return '';
+  const items = warnings.map(w => {
+    const id = w.id || w.ID || 'unknown';
+    const severity = w.severity || w.Severity || 'unknown';
+    const snippet = w.snippet || w.Snippet || '';
+    return `<li><strong>${esc(id)}</strong> <span>${esc(severity)}</span><br><code>${esc(snippet)}</code></li>`;
+  }).join('');
+  return `<details class="warning-details"><summary class="warn-badge">⚠ ${warnings.length}</summary><ul class="warning-list">${items}</ul></details>`;
 }
 
 function esc(s) {
@@ -170,7 +228,8 @@ async function loadInitial() {
   ]);
   (pRes || []).forEach(c => { pendingMap[c.key] = c; });
   renderPending();
-  (aRes || []).forEach(e => prependAuditRow(e));
+  (aRes || []).forEach(e => auditRows.push(e));
+  renderAuditRows();
 }
 
 // --- SSE ---
@@ -201,7 +260,7 @@ function connectSSE() {
   });
 
   es.addEventListener('audit', e => {
-    prependAuditRow(JSON.parse(e.data));
+    addAuditRow(JSON.parse(e.data));
   });
 }
 

@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
+	"strings"
 	"syscall"
 	"time"
 
@@ -68,6 +70,7 @@ func main() {
 	token := flag.String("token", os.Getenv("MCPGATE_TOKEN"), "bearer token for web UI")
 	addr := flag.String("addr", "127.0.0.1:18789", "web server listen address")
 	approvalTimeout := flag.Duration("approval-timeout", 30*time.Second, "how long to wait for human approval before auto-deny")
+	serverName := flag.String("server", "", "server name from policy config to run (required when config has multiple servers)")
 	flag.Parse()
 
 	serverArgs := flag.Args()
@@ -104,15 +107,17 @@ func main() {
 	// Approval coordinator.
 	coord := approval.New()
 
-	// Build per-server transports from policy config.
-	// TODO v0.5: support multi-server Router by plumbing Router into proxy.Config.
-	router := proxy.NewRouter()
+	// Build the selected server transport from policy config.
 	var primaryTransport transport.Transport
 	var primaryName string
 	var primaryChildDone <-chan struct{} // non-nil only when primary server is a stdio child
 
-	for name, srv := range cfg.Servers {
-		var t transport.Transport
+	if len(cfg.Servers) > 0 {
+		name, srv, selectErr := selectConfiguredServer(cfg.Servers, *serverName)
+		if selectErr != nil {
+			slog.Error("failed to select server", "err", selectErr)
+			os.Exit(1)
+		}
 		switch srv.TransportKind() {
 		case "stdio":
 			stdioMgr, startErr := child.Start(ctx, srv.Command)
@@ -121,25 +126,20 @@ func main() {
 				os.Exit(1)
 			}
 			defer stdioMgr.Stop() //nolint:errcheck
-			t = stdioMgr.Transport()
-			if primaryTransport == nil {
-				primaryChildDone = stdioMgr.Done()
-			}
+			primaryTransport = stdioMgr.Transport()
+			primaryChildDone = stdioMgr.Done()
 		case "http":
-			t = transport.NewHTTPWithEgress(srv.URL, srv.EgressAllow)
+			primaryTransport = transport.NewHTTPWithEgress(srv.URL, srv.EgressAllow)
 		default:
-			slog.Warn("server has no transport configured, skipping", "server", name)
-			continue
+			slog.Error("server has no transport configured", "server", name)
+			os.Exit(1)
 		}
-		router.Add(name, t)
-		if primaryTransport == nil {
-			primaryTransport = t
-			primaryName = name
+		primaryName = name
+	} else {
+		if *serverName != "" {
+			slog.Error("--server requires servers to be defined in policy config")
+			os.Exit(1)
 		}
-	}
-
-	// Fall back to CLI args when no servers are defined in the policy config.
-	if primaryTransport == nil {
 		mgr, startErr := child.Start(ctx, serverArgs)
 		if startErr != nil {
 			slog.Error("failed to start child", "err", startErr, "args", serverArgs)
@@ -176,7 +176,7 @@ func main() {
 	// Agent transport = mcpgate's own stdin/stdout.
 	agentTransport := transport.NewStdio(os.Stdin, os.Stdout)
 
-	// Proxy — wired to the primary (first) server transport.
+	// Proxy — wired to the selected server transport.
 	p := proxy.New(proxy.Config{
 		AgentTransport:  agentTransport,
 		ServerTransport: primaryTransport,
@@ -209,4 +209,34 @@ func main() {
 	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutCancel()
 	httpServer.Shutdown(shutCtx) //nolint:errcheck
+}
+
+func selectConfiguredServer(servers map[string]policy.ServerConfig, requested string) (string, policy.ServerConfig, error) {
+	if requested != "" {
+		srv, ok := servers[requested]
+		if !ok {
+			return "", policy.ServerConfig{}, fmt.Errorf("server %q not found in policy config; available: %s", requested, strings.Join(sortedServerNames(servers), ", "))
+		}
+		return requested, srv, nil
+	}
+
+	names := sortedServerNames(servers)
+	switch len(names) {
+	case 0:
+		return "", policy.ServerConfig{}, fmt.Errorf("no servers defined in policy config")
+	case 1:
+		name := names[0]
+		return name, servers[name], nil
+	default:
+		return "", policy.ServerConfig{}, fmt.Errorf("multiple servers configured (%s); set --server to choose one", strings.Join(names, ", "))
+	}
+}
+
+func sortedServerNames(servers map[string]policy.ServerConfig) []string {
+	names := make([]string, 0, len(servers))
+	for name := range servers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }

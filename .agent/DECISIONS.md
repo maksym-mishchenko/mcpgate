@@ -10,6 +10,27 @@
 **Rejected:** <alternatives and why not> (optional)
 
 -->
+## [2026-06-14] One process per MCP server  #infra
+**What:** Kept the supported model as one selected MCP server per mcpgate process, documented the decision, and removed the unused internal proxy router abstraction.
+**Why:** MCP clients already route by server entry; in-process multiplexing would require synthetic routing semantics that make policy and audit attribution harder to reason about.
+**Rejected:** Full runtime multiplexing inside one mcpgate process.
+
+## [2026-06-13] Repository roadmap as backlog source  #build
+**What:** Added `ROADMAP.md` and aligned README/DESIGN/SECURITY with v1.1 behavior, including interactive approvals, reverse-channel gating, heuristic warnings, deterministic configured-server selection, and the current one-active-server-per-process limitation.
+**Why:** GitHub issues and `.agent/STATE.md` had no active backlog, so future agents needed an in-repo source of truth before continuing feature work.
+
+## [2026-06-13] Explicit server selection for multi-server configs  #infra
+**What:** Added `--server` selection for policy configs with multiple `servers` entries. Single-server configs still auto-select, while ambiguous multi-server configs fail fast instead of choosing a map iteration order.
+**Why:** Showcase behavior must be deterministic and honest: mcpgate can configure stdio/HTTP servers, but one process actively fronts one selected MCP server.
+
+## [2026-06-13] Showcase hardening pass  #ui
+**What:** Added constant-time web token comparison, dashboard audit filters with expandable warning details, and audit retention/rotation guidance.
+**Why:** Showcase-quality governance needs visible triage, safer auth defaults, and an operator story for preserving tamper-evident logs over time.
+
+## [2026-06-13] Structured constraints and symlink checks  #auth
+**What:** Added `constraints.fields` for exact/enum/regex/numeric/bool arguments and opt-in `path.resolve_within` for symlink-aware existing-path containment.
+**Why:** Showcase policies need to control more than file paths, while filesystem reads need an optional defense against symlink escapes without changing the default pure string check behavior.
+
 ## [2026-05-31] Deterministic injection/exfil signature scanner  #auth
 **What:** A pure, no-I/O scanner detects prompt-injection patterns (ignore-previous, jailbreak) and exfil methods (base64, data-URI, AWS credentials, SSH keys), returning Threat objects with ID/Severity/Snippet; verdicts escalate on block_on_warn (11c4d30).
 **Why:** Defense-in-depth against poisoning — heuristics catch common attack vectors in both outbound args and reverse-channel content.

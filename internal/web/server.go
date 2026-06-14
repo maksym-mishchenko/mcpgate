@@ -1,6 +1,8 @@
 package web
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"embed"
 	"encoding/json"
 	"io/fs"
@@ -114,12 +116,18 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 		} else {
 			token = r.URL.Query().Get("token")
 		}
-		if token != s.token {
+		if !tokenMatches(token, s.token) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		next(w, r)
 	}
+}
+
+func tokenMatches(got, want string) bool {
+	gotSum := sha256.Sum256([]byte(got))
+	wantSum := sha256.Sum256([]byte(want))
+	return subtle.ConstantTimeCompare(gotSum[:], wantSum[:]) == 1
 }
 
 // --- handlers ---

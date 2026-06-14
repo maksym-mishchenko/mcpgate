@@ -25,7 +25,7 @@
 - Modify: `examples/simple-policy.yaml`
   - Owns the stdio filesystem example. Show `resolve_within` for existing read/list flows and clarify that ask-gated writes do not evaluate constraints; approvers must inspect proposed paths manually.
 - Modify: `examples/http-policy.yaml`
-  - Owns the HTTP transport policy example. Add comments that explain why read uses both `within` and `resolve_within`, while ask-gated writes rely on manual approver inspection because constraints are not evaluated for ask prompts.
+  - Owns the localhost/sidecar HTTP transport policy example. Add comments that explain why read uses both `within` and `resolve_within`, while ask-gated writes rely on manual approver inspection because constraints are not evaluated for ask prompts.
 - Modify: `ROADMAP.md`
   - Owns local backlog state. Mark the v1.3 TOCTOU item done after tests/docs pass.
 - Modify: `.agent/STATE.md`
@@ -316,7 +316,8 @@ Change the `read_file` block to:
           path:
             # within is a string-level containment check.
             within: ["/srv/safe"]
-            # resolve_within adds symlink defense for existing paths.
+            # resolve_within uses mcpgate's local EvalSymlinks; it is only
+            # meaningful when the MCP server sees the same filesystem namespace.
             resolve_within: ["/srv/safe"]
 ```
 

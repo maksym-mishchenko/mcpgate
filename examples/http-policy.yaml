@@ -1,7 +1,9 @@
 # examples/http-policy.yaml
 #
-# HTTP transport example for a remote or sidecar MCP server that accepts JSON-RPC
-# over POST. Egress is restricted to the configured hostname.
+# HTTP transport example for a localhost/sidecar MCP server that accepts JSON-RPC
+# over POST and shares the same filesystem namespace/path roots as mcpgate.
+# For truly remote MCP servers, resolve_within validates the gateway host's
+# filesystem, not the remote server's filesystem.
 #
 # Usage:
 #   export MCPGATE_TOKEN=$(openssl rand -hex 32)
@@ -12,7 +14,7 @@ mode: enforce
 default: "false"
 
 servers:
-  remote-filesystem:
+  sidecar-filesystem:
     url: "http://127.0.0.1:9000/mcp"
     egress_allow: ["127.0.0.1"]
 
@@ -23,7 +25,8 @@ servers:
           path:
             # within is a string-level containment check.
             within: ["/srv/safe"]
-            # resolve_within adds symlink defense for existing paths.
+            # resolve_within uses mcpgate's local EvalSymlinks; it is only
+            # meaningful when the MCP server sees the same filesystem namespace.
             resolve_within: ["/srv/safe"]
 
       write_file:

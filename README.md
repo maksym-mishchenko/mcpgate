@@ -62,10 +62,12 @@ AI Agent (e.g. Claude)
 
 ### Install
 
+Download a release archive from <https://github.com/maksym-mishchenko/mcpgate/releases>, extract the `mcpgate` binary for your OS/architecture, and put it on your `PATH`.
+
+Or install with Go:
+
 ```bash
-git clone https://github.com/maksym-mishchenko/mcpgate
-cd mcpgate
-go install ./cmd/mcpgate
+go install github.com/maksym-mishchenko/mcpgate/cmd/mcpgate@latest
 ```
 
 ### Create a policy file
@@ -222,6 +224,8 @@ If the policy config defines one server, mcpgate starts that server's `command` 
 
 mcpgate intentionally runs one active MCP server per process. For multiple MCP servers, configure one client entry and one mcpgate process per server; share a policy file if that makes operations simpler, but select each server explicitly with `--server`.
 
+Policy decisions are hot-reloaded from `--config` when the policy file modification time changes. Reload failures keep the last valid policy in memory rather than replacing it with a broken config. The selected MCP server transport is startup-only; changing `servers.<name>.command`, `url`, or `egress_allow` requires restarting mcpgate.
+
 ### Audit subcommands
 
 ```bash
@@ -242,10 +246,34 @@ Generate and store real dashboard tokens outside the repository. See [`docs/OPER
 
 ### `GET /health`
 
-Returns `{"status":"ok"}` when the gateway is running.
+Returns safe, non-secret runtime status when the gateway is running.
 
 ```bash
 curl -H "Authorization: Bearer $MCPGATE_TOKEN" http://127.0.0.1:18789/health
+```
+
+Example response:
+
+```json
+{
+  "status": "ok",
+  "version": "1.4.2",
+  "server": "filesystem",
+  "policy": {
+    "path": "mcpgate.yaml",
+    "mode": "enforce",
+    "reload": "hot-last-known-good",
+    "heuristics_enabled": true,
+    "heuristics_block_on_warn": false
+  },
+  "audit": {
+    "history": true,
+    "hmac": true
+  },
+  "runtime": {
+    "pending": 0
+  }
+}
 ```
 
 ### `GET /pending`

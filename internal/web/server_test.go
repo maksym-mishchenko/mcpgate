@@ -28,7 +28,26 @@ func makeServer() *web.Server {
 }
 
 func TestHealthEndpoint(t *testing.T) {
-	s := makeServer()
+	coord := approval.New()
+	s := web.New(web.Config{
+		Token:       testToken,
+		Coordinator: coord,
+		Health: web.HealthInfo{
+			Version:    "test-version",
+			ServerName: "fs",
+			PolicyStatus: func() web.PolicyStatus {
+				return web.PolicyStatus{
+					Path:                  "mcpgate.yaml",
+					Mode:                  "enforce",
+					Reload:                "hot-last-known-good",
+					HeuristicsEnabled:     true,
+					HeuristicsBlockOnWarn: true,
+				}
+			},
+			Audit: web.AuditStatus{History: true, HMAC: true},
+		},
+	})
+	s.AddPending("fs:1", event.PendingCall{Key: "fs:1"})
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	req.Header.Set("Authorization", "Bearer "+testToken)
@@ -36,6 +55,43 @@ func TestHealthEndpoint(t *testing.T) {
 	s.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Errorf("health: status = %d, want 200", rec.Code)
+	}
+	var got struct {
+		Status  string `json:"status"`
+		Version string `json:"version"`
+		Server  string `json:"server"`
+		Policy  struct {
+			Path                  string `json:"path"`
+			Mode                  string `json:"mode"`
+			Reload                string `json:"reload"`
+			HeuristicsEnabled     bool   `json:"heuristics_enabled"`
+			HeuristicsBlockOnWarn bool   `json:"heuristics_block_on_warn"`
+		} `json:"policy"`
+		Audit struct {
+			History bool `json:"history"`
+			HMAC    bool `json:"hmac"`
+		} `json:"audit"`
+		Runtime struct {
+			Pending int `json:"pending"`
+		} `json:"runtime"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode health: %v", err)
+	}
+	if got.Status != "ok" || got.Version != "test-version" || got.Server != "fs" {
+		t.Fatalf("unexpected health identity: %+v", got)
+	}
+	if got.Policy.Path != "mcpgate.yaml" || got.Policy.Mode != "enforce" || got.Policy.Reload != "hot-last-known-good" {
+		t.Fatalf("unexpected policy health: %+v", got.Policy)
+	}
+	if !got.Policy.HeuristicsEnabled || !got.Policy.HeuristicsBlockOnWarn {
+		t.Fatalf("unexpected heuristic health: %+v", got.Policy)
+	}
+	if !got.Audit.History || !got.Audit.HMAC {
+		t.Fatalf("unexpected audit health: %+v", got.Audit)
+	}
+	if got.Runtime.Pending != 1 {
+		t.Fatalf("pending = %d, want 1", got.Runtime.Pending)
 	}
 }
 

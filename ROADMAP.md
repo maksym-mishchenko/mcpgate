@@ -4,7 +4,7 @@ This roadmap tracks future practical work for mcpgate after the completed v1.4.1
 
 ## Current baseline
 
-- Latest release: v1.4.1, "Harden the gate".
+- Latest release: v1.4.1, "Harden the gate"; current unreleased polish adds richer runtime health and hot policy decisions.
 - Core security invariants are implemented: deny-by-default policy, write-ahead SQLite audit, fail-closed forwarding, runtime HMAC signing, strict keyed audit export verification, interactive approval, reverse-channel gating, deterministic heuristic warnings, deterministic configured-server selection, structured typed-JSON constraints, symlink-aware path checks, approval-source audit metadata, bounded remote/server response paths, and conservative audit-based policy discovery.
 - Local worktree note: Go commands in this Copilot worktree may need `-buildvcs=false` because VCS stamping can fail in the generated worktree path.
 
@@ -16,6 +16,14 @@ This roadmap tracks future practical work for mcpgate after the completed v1.4.1
 | Done | Runtime audit HMAC signing | Normal gateway runs can produce signed audit rows and keyed verification requires signatures |
 | Done | Transport and server response bounds | Remote MCP calls cannot hang forever or return unbounded response bodies |
 | Done | Typed policy arguments | Structured constraints evaluate JSON values without string-flattening surprises |
+
+## Post-release completion polish
+
+| Priority | Item | Outcome |
+|---|---|---|
+| In progress | Richer health endpoint | Operators can see safe runtime status, policy mode, heuristic settings, audit availability, and pending approval count |
+| In progress | Hot policy decisions | Policy decision and heuristic edits reload from the config file with last-known-good semantics |
+| In progress | Install/adoption polish | README explains release-binary install and current runtime semantics |
 
 ## v1.2.0 — Documentation and operator hardening
 
@@ -51,4 +59,4 @@ This roadmap tracks future practical work for mcpgate after the completed v1.4.1
 
 ## Blocked / needs explicit approval
 
-- No blocked repository-local roadmap items.
+- No blocked repository-local roadmap items. Demo video remains intentionally out of scope for this batch.

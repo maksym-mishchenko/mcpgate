@@ -10,6 +10,11 @@
 **Rejected:** <alternatives and why not> (optional)
 
 -->
+## [2026-06-15] Hot reload affects policy decisions, not transport wiring  #auth #infra
+**What:** Runtime proxy decisions now read policy through the existing last-known-good hot loader, and `/health` exposes safe reload status. The selected MCP server transport is still built once at startup.
+**Why:** Operators can tune allow/deny/ask rules and heuristic blocking without restarting, while avoiding unsafe mid-flight swaps of child processes, HTTP URLs, or egress allowlists.
+**Rejected:** Rebuilding server transports on policy file changes; that would blur process ownership, restart semantics, and audit attribution for a local governance tool.
+
 ## [2026-06-14] v1.4.1 hardening fails closed at runtime boundaries  #auth #data #infra #ui
 **What:** Dashboard pending approvals now render untrusted request IDs with DOM APIs; runtime audit signing is opt-in via `--audit-key`; keyed export verification requires contiguous sequence numbers and signatures on every non-bootstrap row; HTTP and proxied server responses have bounded waits/body sizes; policy constraints evaluate raw JSON arguments.
 **Why:** The showcase must demonstrate zero-trust governance in both policy and operational boundaries: untrusted IDs must not become script, signed verification must not silently accept unsigned evidence, remote servers must not hang or exhaust the gateway, and JSON argument type changes must not bypass constraints.

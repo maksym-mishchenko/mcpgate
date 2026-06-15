@@ -53,7 +53,10 @@ func NewHotLoader(path string) (*HotLoader, error) {
 	if err != nil {
 		return nil, err
 	}
-	info, _ := os.Stat(path)
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
 	return &HotLoader{path: path, cfg: cfg, mtime: info.ModTime()}, nil
 }
 

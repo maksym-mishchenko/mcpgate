@@ -31,6 +31,12 @@ func (f *fakeFailAudit) Append(_ audit.Entry) error { return fmt.Errorf("disk fu
 func (f *fakeFailAudit) VerifyChain() (bool, error) { return true, nil }
 func (f *fakeFailAudit) Close() error               { return nil }
 
+type testPolicySource struct {
+	cfg *policy.Config
+}
+
+func (s testPolicySource) Get() *policy.Config { return s.cfg }
+
 type failingSendTransport struct{}
 
 func (f failingSendTransport) Recv(context.Context) (jsonrpc.Message, error) {
@@ -110,6 +116,41 @@ func TestAllowedCallForwarded(t *testing.T) {
 	if !bytes.Contains(agentOut.Bytes(), []byte("hello")) {
 		t.Errorf("agent output missing server response content; got: %s", agentOut.Bytes())
 	}
+}
+
+func TestPolicySourceOverridesStaticConfig(t *testing.T) {
+	agentMsg := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{}}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(agentMsg), &agentOut)
+	serverIn := transport.NewStdio(strings.NewReader(""), &bytes.Buffer{})
+
+	staticCfg := makeCfg("enforce")
+	sourceCfg := makeCfg("enforce")
+	sourceCfg.Servers["fs"].Tools["read_file"] = policy.TargetRule{Allow: policy.AllowFalse}
+
+	fa := &fakeAudit{}
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    staticCfg,
+		PolicySource:    testPolicySource{cfg: sourceCfg},
+		Coordinator:     approval.New(),
+		AuditStore:      fa,
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	if len(fa.entries) != 1 {
+		t.Fatalf("audit entries = %d, want 1", len(fa.entries))
+	}
+	if fa.entries[0].Verdict != "DENY" {
+		t.Fatalf("verdict = %q, want DENY", fa.entries[0].Verdict)
+	}
+	assertJSONRPCError(t, agentOut.Bytes(), -32001)
 }
 
 func TestAllowedCallSendsErrorWhenServerResponseUnavailable(t *testing.T) {

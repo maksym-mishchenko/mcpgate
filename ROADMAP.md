@@ -1,10 +1,10 @@
 # Roadmap
 
-This roadmap tracks future practical work for mcpgate after the completed v1.4.1 showcase baseline. GitHub issues can mirror these items when work starts, but this file is the repository-local backlog source.
+This roadmap tracks future practical work for mcpgate after the completed v1.4.2 showcase baseline. GitHub issues can mirror these items when work starts, but this file is the repository-local backlog source.
 
 ## Current baseline
 
-- Latest release: v1.4.1, "Harden the gate"; current unreleased polish adds richer runtime health and hot policy decisions.
+- Latest release: v1.4.2, "Complete the tool".
 - Core security invariants are implemented: deny-by-default policy, write-ahead SQLite audit, fail-closed forwarding, runtime HMAC signing, strict keyed audit export verification, interactive approval, reverse-channel gating, deterministic heuristic warnings, deterministic configured-server selection, structured typed-JSON constraints, symlink-aware path checks, approval-source audit metadata, bounded remote/server response paths, and conservative audit-based policy discovery.
 - Local worktree note: Go commands in this Copilot worktree may need `-buildvcs=false` because VCS stamping can fail in the generated worktree path.
 
@@ -21,9 +21,9 @@ This roadmap tracks future practical work for mcpgate after the completed v1.4.1
 
 | Priority | Item | Outcome |
 |---|---|---|
-| In progress | Richer health endpoint | Operators can see safe runtime status, policy mode, heuristic settings, audit availability, and pending approval count |
-| In progress | Hot policy decisions | Policy decision and heuristic edits reload from the config file with last-known-good semantics |
-| In progress | Install/adoption polish | README explains release-binary install and current runtime semantics |
+| Done | Richer health endpoint | Operators can see safe runtime status, policy mode, heuristic settings, audit availability, and pending approval count |
+| Done | Hot policy decisions | Policy decision and heuristic edits reload from the config file with last-known-good semantics |
+| Done | Install/adoption polish | README explains release-binary install and current runtime semantics |
 
 ## v1.2.0 — Documentation and operator hardening
 

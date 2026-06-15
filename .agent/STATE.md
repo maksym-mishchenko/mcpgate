@@ -21,6 +21,7 @@ Last updated: 2026-06-15 by copilot
 - Completed v1.4.1 security/reliability hardening: dashboard XSS fix, runtime audit HMAC signing, strict keyed verification, HTTP/proxy bounds, and typed policy arguments.
 - Published v1.4.1 release metadata and GitHub release.
 - Completed post-release non-video polish: richer `/health`, hot policy decision reload, release-binary install docs, and roadmap cleanup.
+- Added the narrated 60-second showcase video asset and linked it from README/SHOWCASE docs.
 
 ## In progress
 
@@ -28,4 +29,4 @@ Last updated: 2026-06-15 by copilot
 - Plain Go VCS stamping can fail in generated Copilot worktrees; use `-buildvcs=false` locally if needed.
 
 ## Next steps
-- Publish v1.4.2 release metadata and GitHub release.
+- No repository-local completion items are currently queued.

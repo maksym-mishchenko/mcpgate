@@ -13,10 +13,10 @@ export MCPGATE_TOKEN=$(openssl rand -hex 32)
 mcpgate --config examples/simple-policy.yaml
 ```
 
-Open the local dashboard printed on startup:
+Open the local dashboard printed on startup. The startup message intentionally omits the token; add the token as a local URL fragment when opening the UI:
 
-```text
-http://127.0.0.1:18789/?token=<token>
+```bash
+open "http://127.0.0.1:18789/#token=$MCPGATE_TOKEN"
 ```
 
 Configure the MCP client to run `mcpgate --config /path/to/examples/simple-policy.yaml` instead of connecting directly to the filesystem MCP server.
@@ -47,7 +47,7 @@ Configure the MCP client to run `mcpgate --config /path/to/examples/simple-polic
 
 ## Talk track
 
-> MCP tools make agents useful, but they also create a new privilege boundary. mcpgate puts a deny-by-default control plane at that boundary. It does not trust the model, the prompt, or the MCP server response: it evaluates policy, writes the audit record first, and fails closed if anything goes wrong.
+> MCP tools make agents useful, but they also create a new privilege boundary. mcpgate puts a deny-by-default control plane at that boundary: it evaluates gated methods against policy, records decisions before forwarding, and flags common prompt-injection or tool-poisoning patterns. Enable `heuristics.block_on_warn` when suspicious content should be blocked instead of only warned.
 
 ## Operator commands
 

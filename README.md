@@ -2,7 +2,7 @@
 
 **Zero-Trust MCP Gateway** — a deny-by-default firewall/proxy for the [Model Context Protocol](https://modelcontextprotocol.io).
 
-mcpgate sits between an AI agent and an MCP server. Every gated `tools/call`, `resources/read`, `prompts/get`, and reverse-channel `sampling/createMessage` is evaluated against a YAML policy before it reaches the other side. Unknown or denied calls are blocked and logged; nothing passes through without an explicit allow decision.
+mcpgate sits between an AI agent and an MCP server. Every gated `tools/call`, `resources/read`, `prompts/get`, and reverse-channel `sampling/createMessage` is evaluated against a YAML policy before it reaches the other side. Unknown or denied gated calls are blocked and logged; non-sensitive protocol traffic such as initialization still passes through.
 
 ## Showcase demo
 
@@ -63,7 +63,7 @@ AI Agent (e.g. Claude)
 
 ### Prerequisites
 
-- Go 1.21+ (module path: `github.com/maksym-mishchenko/mcpgate`)
+- Go 1.25+ (module path: `github.com/maksym-mishchenko/mcpgate`)
 - An MCP server binary (e.g. `mcp-filesystem`)
 
 ### Install
@@ -117,6 +117,8 @@ openssl rand -hex 32 > .mcpgate-token
 # Run — with a single configured server, mcpgate starts its command from the policy
 mcpgate --config mcpgate.yaml --token-file .mcpgate-token
 ```
+
+mcpgate prints a token-safe dashboard URL with a placeholder, for example `http://127.0.0.1:18789/#token=<token-from-token-source>`, so startup logs and screenshots do not expose credentials. Replace the placeholder with the token from `.mcpgate-token` for local browser access. Use the same token as a `Bearer` token for API calls.
 
 Configure your AI client to use mcpgate's stdio instead of the MCP server directly. For example in Claude Desktop's `mcp.json`:
 
@@ -246,7 +248,7 @@ Use `mcpgate keygen audit.key` and run with `--audit-key audit.key` to sign runt
 
 ## Web API reference
 
-All endpoints require authentication. Pass the token as a `Bearer` header or `?token=` query param. Requests from non-localhost `Host` headers are rejected (anti-DNS-rebinding).
+All endpoints require authentication. Prefer passing the token as a `Bearer` header; the local browser UI accepts `#token=` and keeps the token out of the initial HTTP request URL. Requests from non-localhost `Host` headers are rejected (anti-DNS-rebinding).
 
 Generate and store real dashboard tokens outside the repository. See [`docs/OPERATIONAL_SECRETS.md`](docs/OPERATIONAL_SECRETS.md) for storage and rotation guidance.
 

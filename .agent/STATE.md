@@ -23,6 +23,7 @@ Last updated: 2026-06-15 by copilot
 - Completed post-release non-video polish: richer `/health`, hot policy decision reload, release-binary install docs, and roadmap cleanup.
 - Added the narrated 60-second showcase video asset and linked it from README/SHOWCASE docs.
 - Added MIT licensing and contributor setup guidance for open-source readiness.
+- Hardened public launch blockers: startup output no longer prints dashboard tokens, the dashboard prefers `#token=` over query-token links, public PR checks use GitHub-hosted runners, local secret artifacts are ignored, and public security/docs claims are narrowed.
 
 ## In progress
 

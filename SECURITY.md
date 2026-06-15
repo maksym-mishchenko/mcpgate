@@ -47,6 +47,7 @@ Every web API endpoint (`/health`, `/approve`, `/pending`, `/audit`, `/events`) 
 - Tokens are hashed with SHA-256 and compared with constant-time comparison.
 - Recommendation: generate with `openssl rand -hex 32`.
 - Prefer `--token-file` or `MCPGATE_TOKEN_FILE` for repeatable launches so the token is not present in command-line arguments.
+- Startup output prints the local dashboard URL with a token placeholder, not the real token. The browser UI prefers `#token=...` so the token is not sent on the initial static-page request. Avoid sharing screenshots, logs, shell history, or browser history entries that include real tokens.
 - Do not commit operational tokens, dashboard API tokens, or `MCPGATE_TOKEN` values to repositories or shared instruction files. Store them in a secret manager or environment-specific secret store and rotate any value that has been exposed outside that boundary.
 
 ### Anti-DNS-rebinding (Host header check)
@@ -102,10 +103,26 @@ Operational token storage and rotation guidance lives in `docs/OPERATIONAL_SECRE
 
 ## Responsible disclosure
 
+### Supported versions
+
+Security fixes are prioritized for the latest released version. Older tags are kept for reproducibility, but only the current release line receives routine fixes unless a disclosure clearly affects supported users.
+
+### Vulnerability scope
+
+Please report vulnerabilities that affect mcpgate's policy enforcement, authentication, audit integrity, transport boundaries, dashboard rendering, release artifacts, or documented security guarantees. General MCP server bugs, vulnerabilities in an upstream MCP server, or unsafe local policies are usually out of scope unless mcpgate incorrectly forwards or documents them.
+
+### Disclosure process
+
 mcpgate is a personal project. If you find a security issue:
 
 1. **Do not open a public GitHub issue** for undisclosed vulnerabilities.
 2. Open a [GitHub Security Advisory](https://github.com/maksym-mishchenko/mcpgate/security/advisories/new) (private disclosure).
 3. Include a description of the issue, reproduction steps, and impact.
+
+I will acknowledge valid reports as quickly as possible, usually within a few days, and will coordinate a fix or public advisory before disclosure when practical.
+
+### Safe harbor
+
+Good-faith testing that avoids data destruction, persistence, spam, social engineering, and access to unrelated systems is welcome. Stop testing and report privately if you find a path to execute tools, bypass policy, expose tokens, tamper with audit evidence, or access data outside your own environment.
 
 For general bugs and non-security issues, open a regular GitHub issue.

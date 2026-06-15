@@ -6,7 +6,7 @@
 
 **Architecture:** Keep all behavior changes inside `internal/policy`; the proxy, audit, transport, and web layers stay unchanged. Use deterministic unit tests for policy-time behavior and update operator docs/examples to distinguish string-only path checks from disk-aware symlink checks.
 
-**Tech Stack:** Go 1.21+, standard library `filepath`/`os` testing helpers, YAML policy examples, Markdown docs.
+**Tech Stack:** Go 1.25+, standard library `filepath`/`os` testing helpers, YAML policy examples, Markdown docs.
 
 ---
 

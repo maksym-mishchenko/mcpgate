@@ -6,7 +6,7 @@ Thanks for your interest in mcpgate. This project is a zero-trust gateway for MC
 
 Prerequisites:
 
-- Go 1.21+.
+- Go 1.25+.
 - An MCP server binary if you want to run an end-to-end local demo.
 
 Install dependencies and run the test suite:
@@ -44,7 +44,11 @@ goreleaser check
    mcpgate --config examples/simple-policy.yaml --token-file .mcpgate-token
    ```
 
-4. Open the dashboard URL printed on startup.
+4. Open the dashboard URL printed on startup, replacing the placeholder with your local token:
+
+   ```bash
+   open "http://127.0.0.1:18789/#token=$(cat .mcpgate-token)"
+   ```
 
 Do not commit `.mcpgate-token`, audit keys, exported production audit logs, or local SQLite runtime databases.
 

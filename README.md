@@ -1,5 +1,10 @@
 # mcpgate
 
+[![CI](https://github.com/maksym-mishchenko/mcpgate/actions/workflows/ci.yml/badge.svg)](https://github.com/maksym-mishchenko/mcpgate/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/maksym-mishchenko/mcpgate)](https://github.com/maksym-mishchenko/mcpgate/releases)
+[![Go Reference](https://pkg.go.dev/badge/github.com/maksym-mishchenko/mcpgate.svg)](https://pkg.go.dev/github.com/maksym-mishchenko/mcpgate)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Zero-Trust MCP Gateway** — a deny-by-default firewall/proxy for the [Model Context Protocol](https://modelcontextprotocol.io).
 
 mcpgate sits between an AI agent and an MCP server. Every gated `tools/call`, `resources/read`, `prompts/get`, and reverse-channel `sampling/createMessage` is evaluated against a YAML policy before it reaches the other side. Unknown or denied gated calls are blocked and logged; non-sensitive protocol traffic such as initialization still passes through.
@@ -31,7 +36,7 @@ The fastest way to understand mcpgate is the showcase flow in [`docs/SHOWCASE.md
 
 ## Project status
 
-mcpgate is open source under the [MIT License](LICENSE). Contributions are welcome; start with [CONTRIBUTING.md](CONTRIBUTING.md) and report vulnerabilities through the private disclosure process in [SECURITY.md](SECURITY.md).
+mcpgate is open source under the [MIT License](LICENSE). Contributions are welcome; start with [CONTRIBUTING.md](CONTRIBUTING.md), follow the [Code of Conduct](CODE_OF_CONDUCT.md), and report vulnerabilities through the private disclosure process in [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -68,7 +73,7 @@ AI Agent (e.g. Claude)
 
 ### Install
 
-Download a release archive from <https://github.com/maksym-mishchenko/mcpgate/releases>, extract the `mcpgate` binary for your OS/architecture, and put it on your `PATH`.
+Download a release archive from <https://github.com/maksym-mishchenko/mcpgate/releases>, verify it with [`checksums.txt` and GitHub artifact attestations](docs/RELEASE_PROVENANCE.md), extract the `mcpgate` binary for your OS/architecture, and put it on your `PATH`.
 
 Or install with Go:
 

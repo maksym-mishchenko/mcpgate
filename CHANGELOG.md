@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-06-15 — "Open-source launch"
+
+### Added
+- GitHub issue templates for bug reports, feature requests, and documentation improvements.
+- Code of conduct for public project participation.
+- Tag-driven release workflow with GoReleaser archives, checksums, and GitHub artifact attestations.
+- Release provenance guide with checksum and attestation verification commands.
+- README badges for CI, latest release, Go Reference, and MIT license.
+- Launch announcement copy for GitHub release notes and social posts.
+
 ## [1.4.2] - 2026-06-15 — "Complete the tool"
 
 ### Added

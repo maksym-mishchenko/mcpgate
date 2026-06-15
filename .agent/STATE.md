@@ -22,6 +22,7 @@ Last updated: 2026-06-15 by copilot
 - Published v1.4.1 release metadata and GitHub release.
 - Completed post-release non-video polish: richer `/health`, hot policy decision reload, release-binary install docs, and roadmap cleanup.
 - Added the narrated 60-second showcase video asset and linked it from README/SHOWCASE docs.
+- Added MIT licensing and contributor setup guidance for open-source readiness.
 
 ## In progress
 

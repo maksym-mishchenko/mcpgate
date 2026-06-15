@@ -29,6 +29,10 @@ The fastest way to understand mcpgate is the showcase flow in [`docs/SHOWCASE.md
 - Stdio and HTTP server transports with optional HTTP egress allowlisting.
 - One active selected MCP server per gateway process for explicit client routing and audit attribution.
 
+## Project status
+
+mcpgate is open source under the [MIT License](LICENSE). Contributions are welcome; start with [CONTRIBUTING.md](CONTRIBUTING.md) and report vulnerabilities through the private disclosure process in [SECURITY.md](SECURITY.md).
+
 ---
 
 ## How it works

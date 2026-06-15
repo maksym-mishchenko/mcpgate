@@ -1,5 +1,5 @@
 # State — mcpgate
-Last updated: 2026-06-15 by copilot
+Last updated: 2026-06-16 by copilot
 
 ## Done
 - Synced README, DESIGN, SECURITY, and examples with current v1.1 behavior.

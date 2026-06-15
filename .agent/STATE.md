@@ -20,12 +20,12 @@ Last updated: 2026-06-15 by copilot
 - Prepared v1.4.0 release notes and roadmap baseline.
 - Completed v1.4.1 security/reliability hardening: dashboard XSS fix, runtime audit HMAC signing, strict keyed verification, HTTP/proxy bounds, and typed policy arguments.
 - Published v1.4.1 release metadata and GitHub release.
+- Completed post-release non-video polish: richer `/health`, hot policy decision reload, release-binary install docs, and roadmap cleanup.
 
 ## In progress
-- Completing post-release non-video polish: richer `/health`, hot policy decision reload, install/adoption docs, and roadmap state cleanup.
 
 ## Known issues
 - Plain Go VCS stamping can fail in generated Copilot worktrees; use `-buildvcs=false` locally if needed.
 
 ## Next steps
-- Finish post-release polish tests and open the polish PR.
+- Publish v1.4.2 release metadata and GitHub release.

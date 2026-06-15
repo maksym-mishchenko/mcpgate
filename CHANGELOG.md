@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-06-15 — "Complete the tool"
+
 ### Added
 - **Richer health endpoint** — `/health` now reports safe runtime metadata: version, selected server, policy mode/reload status, heuristic settings, audit availability, and pending approval count.
 - **Hot policy reload** — runtime policy decisions now read through the existing last-known-good policy loader, so edits to policy decisions and heuristic settings take effect without restarting the gateway.

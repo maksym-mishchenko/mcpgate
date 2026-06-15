@@ -24,6 +24,7 @@ type Config struct {
 	AgentTransport  transport.Transport
 	ServerTransport transport.Transport
 	PolicyConfig    *policy.Config
+	PolicySource    PolicySource
 	Coordinator     *approval.Coordinator
 	AuditStore      audit.AuditStore
 	ServerName      string
@@ -44,7 +45,24 @@ type Proxy struct {
 	cfg Config
 }
 
-func New(cfg Config) *Proxy { return &Proxy{cfg: cfg} }
+// PolicySource provides the latest policy config. Implementations may reload
+// from disk, but must return the last valid config on reload errors.
+type PolicySource interface {
+	Get() *policy.Config
+}
+
+type staticPolicySource struct {
+	cfg *policy.Config
+}
+
+func (s staticPolicySource) Get() *policy.Config { return s.cfg }
+
+func New(cfg Config) *Proxy {
+	if cfg.PolicySource == nil {
+		cfg.PolicySource = staticPolicySource{cfg: cfg.PolicyConfig}
+	}
+	return &Proxy{cfg: cfg}
+}
 
 // Run reads from AgentTransport until ctx is cancelled or transport error.
 func (p *Proxy) Run(ctx context.Context) {
@@ -73,14 +91,15 @@ func (p *Proxy) handleGated(ctx context.Context, msg jsonrpc.Message) {
 	name := extractName(msg)
 	rawArgs := extractRawArgs(msg)
 	args := displayArgs(rawArgs)
+	cfg := p.policyConfig()
 
-	verdict := policy.EvaluateArgs(p.cfg.ServerName, msg.Method, name, rawArgs, p.cfg.PolicyConfig)
+	verdict := policy.EvaluateArgs(p.cfg.ServerName, msg.Method, name, rawArgs, cfg)
 	reason := "policy"
 	approvalSource := "policy"
 
 	// For ask/unknown in enforce mode: park for human approval.
 	if (verdict == policy.VerdictAsk || verdict == policy.VerdictUnknown) &&
-		p.cfg.PolicyConfig.Mode == "enforce" {
+		cfg.Mode == "enforce" {
 
 		key := fmt.Sprintf("%s:%s", p.cfg.ServerName, string(msg.ID))
 		call := event.PendingCall{
@@ -283,7 +302,8 @@ func (p *Proxy) recvServerResponse(ctx context.Context) (jsonrpc.Message, error)
 // agent's reply back to the server. On DENY it sends a JSON-RPC error to the
 // server. Every decision is audited.
 func (p *Proxy) handleServerRequest(ctx context.Context, msg jsonrpc.Message) error {
-	verdict := policy.EvaluateArgs(p.cfg.ServerName, msg.Method, "", nil, p.cfg.PolicyConfig)
+	cfg := p.policyConfig()
+	verdict := policy.EvaluateArgs(p.cfg.ServerName, msg.Method, "", nil, cfg)
 	reason := "policy"
 	approvalSource := "policy"
 
@@ -354,6 +374,14 @@ func (p *Proxy) sendServerError(ctx context.Context, req jsonrpc.Message, messag
 	p.cfg.ServerTransport.Send(ctx, resp) //nolint:errcheck
 }
 
+func (p *Proxy) policyConfig() *policy.Config {
+	cfg := p.cfg.PolicySource.Get()
+	if cfg == nil {
+		return p.cfg.PolicyConfig
+	}
+	return cfg
+}
+
 func extractName(msg jsonrpc.Message) string {
 	var params struct {
 		Name string `json:"name"`
@@ -397,11 +425,11 @@ func threatsToWarnings(ts []scanner.Threat) []audit.Warning {
 }
 
 func (p *Proxy) heuristicsEnabled() bool {
-	h := p.cfg.PolicyConfig.Heuristics
+	h := p.policyConfig().Heuristics
 	return h != nil && h.Enabled
 }
 
 func (p *Proxy) blockOnWarn() bool {
-	h := p.cfg.PolicyConfig.Heuristics
+	h := p.policyConfig().Heuristics
 	return h != nil && h.BlockOnWarn
 }

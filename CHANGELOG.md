@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+- **Richer health endpoint** — `/health` now reports safe runtime metadata: version, selected server, policy mode/reload status, heuristic settings, audit availability, and pending approval count.
+- **Hot policy reload** — runtime policy decisions now read through the existing last-known-good policy loader, so edits to policy decisions and heuristic settings take effect without restarting the gateway.
+- **Release-binary install guidance** — README now points users to GitHub release archives and `go install ...@latest`.
+
+### Changed
+- Documented that hot reload applies to policy decisions, while selected MCP server transport settings remain startup-only and require a restart.
+
 ## [1.4.1] - 2026-06-15 — "Harden the gate"
 
 ### Added

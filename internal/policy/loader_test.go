@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/maksym-mishchenko/mcpgate/internal/policy"
 )
@@ -117,5 +118,39 @@ func TestLoad_HeuristicsExplicitDisabled(t *testing.T) {
 	}
 	if cfg.Heuristics == nil || cfg.Heuristics.Enabled {
 		t.Fatalf("expected heuristics explicitly disabled, got %+v", cfg.Heuristics)
+	}
+}
+
+func TestHotLoaderReloadsAndKeepsLastGoodConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "policy.yaml")
+	writePolicy := func(contents string, modTime time.Time) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatalf("write policy: %v", err)
+		}
+		if err := os.Chtimes(path, modTime, modTime); err != nil {
+			t.Fatalf("chtimes policy: %v", err)
+		}
+	}
+
+	baseTime := time.Now().Add(-2 * time.Hour)
+	writePolicy("version: 1\nmode: observe\nservers:\n  s:\n    command: [\"echo\"]\n", baseTime)
+	loader, err := policy.NewHotLoader(path)
+	if err != nil {
+		t.Fatalf("NewHotLoader: %v", err)
+	}
+	if got := loader.Get().Mode; got != "observe" {
+		t.Fatalf("initial mode = %q, want observe", got)
+	}
+
+	writePolicy("version: 1\nmode: enforce\nservers:\n  s:\n    command: [\"echo\"]\n", baseTime.Add(time.Hour))
+	if got := loader.Get().Mode; got != "enforce" {
+		t.Fatalf("reloaded mode = %q, want enforce", got)
+	}
+
+	writePolicy("version: 1\nmode: observe\nservers:\n  s:\n    command: [\"echo\"]\n    url: http://localhost:8080/mcp\n", baseTime.Add(2*time.Hour))
+	if got := loader.Get().Mode; got != "enforce" {
+		t.Fatalf("mode after invalid reload = %q, want last good enforce", got)
 	}
 }

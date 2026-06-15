@@ -19,11 +19,13 @@ Last updated: 2026-06-15 by copilot
 - Added audit review handoff documentation with export, verify, review, and discovery examples.
 - Prepared v1.4.0 release notes and roadmap baseline.
 - Completed v1.4.1 security/reliability hardening: dashboard XSS fix, runtime audit HMAC signing, strict keyed verification, HTTP/proxy bounds, and typed policy arguments.
+- Published v1.4.1 release metadata and GitHub release.
 
 ## In progress
+- Completing post-release non-video polish: richer `/health`, hot policy decision reload, install/adoption docs, and roadmap state cleanup.
 
 ## Known issues
 - Plain Go VCS stamping can fail in generated Copilot worktrees; use `-buildvcs=false` locally if needed.
 
 ## Next steps
-- Publish v1.4.1 release after release metadata PR merges.
+- Finish post-release polish tests and open the polish PR.

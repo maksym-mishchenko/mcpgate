@@ -102,12 +102,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Load policy.
-	cfg, err := policy.Load(*configPath)
+	// Load policy and keep policy decisions hot-reloadable.
+	policyLoader, err := policy.NewHotLoader(*configPath)
 	if err != nil {
 		slog.Error("failed to load policy", "err", err, "path", *configPath)
 		os.Exit(1)
 	}
+	cfg := policyLoader.Get()
 
 	// Require at least one server source: policy config or CLI args.
 	if len(cfg.Servers) == 0 && len(serverArgs) == 0 {
@@ -179,6 +180,27 @@ func main() {
 		Token:        webToken,
 		Coordinator:  coord,
 		AuditQuerier: querier,
+		Health: web.HealthInfo{
+			Version:    version,
+			ServerName: primaryName,
+			PolicyStatus: func() web.PolicyStatus {
+				current := policyLoader.Get()
+				status := web.PolicyStatus{
+					Path:   *configPath,
+					Mode:   current.Mode,
+					Reload: "hot-last-known-good",
+				}
+				if current.Heuristics != nil {
+					status.HeuristicsEnabled = current.Heuristics.Enabled
+					status.HeuristicsBlockOnWarn = current.Heuristics.BlockOnWarn
+				}
+				return status
+			},
+			Audit: web.AuditStatus{
+				History: querier != nil,
+				HMAC:    *auditKey != "",
+			},
+		},
 	})
 	httpServer := &http.Server{
 		Addr:    *addr,
@@ -200,6 +222,7 @@ func main() {
 		AgentTransport:  agentTransport,
 		ServerTransport: primaryTransport,
 		PolicyConfig:    cfg,
+		PolicySource:    policyLoader,
 		Coordinator:     coord,
 		AuditStore:      store,
 		ServerName:      primaryName,

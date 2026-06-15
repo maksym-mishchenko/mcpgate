@@ -24,6 +24,7 @@ type Config struct {
 	Token        string
 	Coordinator  *approval.Coordinator
 	AuditQuerier audit.AuditQuerier // optional; nil disables /audit history
+	Health       HealthInfo
 }
 
 // Server is the HTTP server for mcpgate's web UI and approval API.
@@ -32,11 +33,32 @@ type Server struct {
 	token   string
 	coord   *approval.Coordinator
 	querier audit.AuditQuerier
+	health  HealthInfo
 	mux     *http.ServeMux
 
 	mu      sync.Mutex
 	clients map[chan []byte]struct{}
 	pending map[string]event.PendingCall
+}
+
+type PolicyStatus struct {
+	Path                  string `json:"path,omitempty"`
+	Mode                  string `json:"mode,omitempty"`
+	Reload                string `json:"reload,omitempty"`
+	HeuristicsEnabled     bool   `json:"heuristics_enabled"`
+	HeuristicsBlockOnWarn bool   `json:"heuristics_block_on_warn"`
+}
+
+type AuditStatus struct {
+	History bool `json:"history"`
+	HMAC    bool `json:"hmac"`
+}
+
+type HealthInfo struct {
+	Version      string
+	ServerName   string
+	PolicyStatus func() PolicyStatus
+	Audit        AuditStatus
 }
 
 // New creates a new Server.
@@ -45,6 +67,7 @@ func New(cfg Config) *Server {
 		token:   cfg.Token,
 		coord:   cfg.Coordinator,
 		querier: cfg.AuditQuerier,
+		health:  cfg.Health,
 		mux:     http.NewServeMux(),
 		clients: make(map[chan []byte]struct{}),
 		pending: make(map[string]event.PendingCall),
@@ -133,9 +156,34 @@ func tokenMatches(got, want string) bool {
 // --- handlers ---
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
+	policyStatus := PolicyStatus{}
+	if s.health.PolicyStatus != nil {
+		policyStatus = s.health.PolicyStatus()
+	}
+	s.mu.Lock()
+	pendingCount := len(s.pending)
+	s.mu.Unlock()
+	body := struct {
+		Status  string       `json:"status"`
+		Version string       `json:"version,omitempty"`
+		Server  string       `json:"server,omitempty"`
+		Policy  PolicyStatus `json:"policy"`
+		Audit   AuditStatus  `json:"audit"`
+		Runtime struct {
+			Pending int `json:"pending"`
+		} `json:"runtime"`
+	}{
+		Status:  "ok",
+		Version: s.health.Version,
+		Server:  s.health.ServerName,
+		Policy:  policyStatus,
+		Audit:   s.health.Audit,
+	}
+	body.Runtime.Pending = pendingCount
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok"}`)) //nolint:errcheck
+	json.NewEncoder(w).Encode(body) //nolint:errcheck
 }
 
 func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {

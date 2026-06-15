@@ -24,6 +24,7 @@ Last updated: 2026-06-15 by copilot
 - Added the narrated 60-second showcase video asset and linked it from README/SHOWCASE docs.
 - Added MIT licensing and contributor setup guidance for open-source readiness.
 - Hardened public launch blockers: startup output no longer prints dashboard tokens, the dashboard prefers `#token=` over query-token links, public PR checks use GitHub-hosted runners, local secret artifacts are ignored, and public security/docs claims are narrowed.
+- Started final open-source launch polish for v1.4.3: issue templates, code of conduct, README badges, release provenance, tag-driven release automation, and announcement copy.
 
 ## In progress
 
@@ -31,4 +32,4 @@ Last updated: 2026-06-15 by copilot
 - Plain Go VCS stamping can fail in generated Copilot worktrees; use `-buildvcs=false` locally if needed.
 
 ## Next steps
-- Publish v1.4.2 release metadata and GitHub release.
+- Merge final launch polish, tag v1.4.3, and verify release archives, checksums, and attestations.

@@ -1,0 +1,25 @@
+name: Documentation improvement
+description: Report confusing, stale, or missing documentation.
+title: "docs: "
+labels: ["documentation"]
+body:
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+      description: Which page, section, command, or example needs work?
+      placeholder: README Quick start, docs/SHOWCASE.md setup, ...
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What was confusing or inaccurate?
+    validations:
+      required: true
+  - type: textarea
+    id: suggested
+    attributes:
+      label: Suggested improvement
+      description: Optional proposed wording or command.

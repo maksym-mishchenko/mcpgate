@@ -13,7 +13,7 @@ mcpgate sits between an AI agent and an MCP server. Every gated `tools/call`, `r
 
 The fastest way to understand mcpgate is the showcase flow in [`docs/SHOWCASE.md`](docs/SHOWCASE.md):
 
-[Watch the 60-second narrated showcase video.](docs/assets/mcpgate-showcase-60s.mp4)
+[Watch the 60-second narrated showcase video.](https://github.com/maksym-mishchenko/mcpgate/releases/download/v1.4.3/mcpgate-showcase-60s.mp4)
 
 1. An agent tries to read a safe file and mcpgate allows it.
 2. The same agent tries to write a file and mcpgate parks the call for human approval.

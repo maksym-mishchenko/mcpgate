@@ -26,6 +26,7 @@ Last updated: 2026-06-15 by copilot
 - Hardened public launch blockers: startup output no longer prints dashboard tokens, the dashboard prefers `#token=` over query-token links, public PR checks use GitHub-hosted runners, local secret artifacts are ignored, and public security/docs claims are narrowed.
 - Completed final open-source launch polish for v1.4.3: issue templates, code of conduct, README badges, release provenance, tag-driven release automation, and announcement copy.
 - Published and verified the v1.4.3 GitHub release with GoReleaser binaries, `checksums.txt`, GitHub artifact attestations, announcement-style release notes, and showcase demo assets.
+- Moved public showcase video links to the v1.4.3 release asset because GitHub does not preview the large MP4 through the repository file viewer.
 
 ## In progress
 

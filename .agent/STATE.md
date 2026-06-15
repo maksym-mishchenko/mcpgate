@@ -31,4 +31,4 @@ Last updated: 2026-06-15 by copilot
 - Plain Go VCS stamping can fail in generated Copilot worktrees; use `-buildvcs=false` locally if needed.
 
 ## Next steps
-- No repository-local completion items are currently queued.
+- Publish v1.4.2 release metadata and GitHub release.

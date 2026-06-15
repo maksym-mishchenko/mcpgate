@@ -32,7 +32,7 @@ Configure the MCP client to run `mcpgate --config /path/to/examples/simple-polic
 
 ## Assets
 
-- Narrated showcase video: [`docs/assets/mcpgate-showcase-60s.mp4`](assets/mcpgate-showcase-60s.mp4)
+- Narrated showcase video: [`mcpgate-showcase-60s.mp4`](https://github.com/maksym-mishchenko/mcpgate/releases/download/v1.4.3/mcpgate-showcase-60s.mp4)
 - Static dashboard screenshot: [`docs/assets/showcase-dashboard.png`](assets/showcase-dashboard.png)
 - Short demo GIF: [`docs/assets/showcase-flow.gif`](assets/showcase-flow.gif)
 - Audit verification terminal screenshot: [`docs/assets/showcase-verify-terminal.png`](assets/showcase-verify-terminal.png)

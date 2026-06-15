@@ -10,6 +10,11 @@
 **Rejected:** <alternatives and why not> (optional)
 
 -->
+## [2026-06-15] Startup output does not print dashboard tokens  #auth #ui
+**What:** The gateway now prints a localhost dashboard URL with a token placeholder, not the real token, and the browser UI accepts `#token=...`, canonicalizing legacy `?token=` links out of the address bar.
+**Why:** Token-in-query remains supported internally for API/SSE compatibility, but printing or documenting full query-token URLs makes logs, terminal recordings, and screenshots unsafe for a public security tool. A placeholder keeps first-run guidance explicit without leaking the secret.
+**Rejected:** Removing query-token support entirely for this release; the SSE endpoint still needs a browser-compatible authentication path, so the safer launch change is to avoid startup disclosure and prefer URL fragments in docs.
+
 ## [2026-06-15] Hot reload affects policy decisions, not transport wiring  #auth #infra
 **What:** Runtime proxy decisions now read policy through the existing last-known-good hot loader, and `/health` exposes safe reload status. The selected MCP server transport is still built once at startup.
 **Why:** Operators can tune allow/deny/ask rules and heuristic blocking without restarting, while avoiding unsafe mid-flight swaps of child processes, HTTP URLs, or egress allowlists.

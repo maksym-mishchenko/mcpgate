@@ -113,7 +113,7 @@ None (genesis record means fresh DBs start with seq=2 for the first real entry; 
 - **`AuditQuerier` interface** — `Recent(n int)` on SQLite store; powers `/audit` endpoint
 - **`/pending` endpoint** — `GET /pending` returns current parked calls as JSON array (auth required)
 - **`/audit` endpoint** — `GET /audit` returns last 100 audit entries newest-first (auth required)
-- **Browser UI** — dark terminal dashboard at `http://127.0.0.1:18789/?token=<token>`: pending approval cards + live audit feed via SSE; reconnection-safe (loads initial state on mount)
+- **Browser UI** — dark terminal dashboard at `http://127.0.0.1:18789/#token=<token>`: pending approval cards + live audit feed via SSE; reconnection-safe (loads initial state on mount)
 - **`--approval-timeout` flag** — configures Park timeout; zero = 30s
 - **Startup URL** — mcpgate prints the UI URL to stderr on startup
 

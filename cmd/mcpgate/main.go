@@ -208,7 +208,7 @@ func main() {
 	}
 	go func() {
 		slog.Info("web server starting", "addr", *addr, "version", version)
-		fmt.Fprintf(os.Stderr, "\n  Open: http://%s/?token=%s\n\n", *addr, webToken)
+		fmt.Fprintf(os.Stderr, "\n  Open dashboard: http://%s/#token=<token-from-token-source>\n  Authenticate API calls with the bearer token from your token source.\n\n", *addr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("web server error", "err", err)
 		}

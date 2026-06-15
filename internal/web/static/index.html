@@ -124,8 +124,23 @@
   </section>
 </main>
 <script>
-const token = new URLSearchParams(location.search).get('token') || '';
-const api = (path, opts) => fetch(path + (path.includes('?') ? '&' : '?') + 'token=' + token, opts);
+const searchParams = new URLSearchParams(location.search);
+const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
+const token = hashParams.get('token') || searchParams.get('token') || '';
+if (searchParams.has('token') && token) {
+  history.replaceState(null, '', location.pathname + '#token=' + encodeURIComponent(token));
+}
+const authPath = (path) => path + (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
+const api = (path, opts) => fetch(authPath(path), opts);
+
+function showAuthMessage(message) {
+  const dot = document.getElementById('status-dot');
+  const label = document.getElementById('status-label');
+  const pending = document.getElementById('pending-cards');
+  dot.className = '';
+  label.textContent = message;
+  pending.innerHTML = '<span id="no-pending">' + esc(message) + '</span>';
+}
 
 // --- pending cards ---
 const pendingMap = {};
@@ -260,21 +275,28 @@ function esc(s) {
 
 // --- load initial state ---
 async function loadInitial() {
-  const [pRes, aRes] = await Promise.all([
-    api('/pending').then(r => r.json()).catch(() => []),
-    api('/audit').then(r => r.json()).catch(() => [])
-  ]);
+  const [pRes, aRes] = await Promise.all([loadJSON('/pending'), loadJSON('/audit')]);
   (pRes || []).forEach(c => { pendingMap[c.key] = c; });
   renderPending();
   (aRes || []).forEach(e => auditRows.push(e));
   renderAuditRows();
 }
 
+async function loadJSON(path) {
+  const response = await api(path);
+  if (response.status === 401) {
+    showAuthMessage('unauthorized: open with #token=<token-from-token-source>');
+    return [];
+  }
+  if (!response.ok) return [];
+  return response.json();
+}
+
 // --- SSE ---
 function connectSSE() {
   const dot = document.getElementById('status-dot');
   const label = document.getElementById('status-label');
-  const es = new EventSource('/events?token=' + token);
+  const es = new EventSource(authPath('/events'));
 
   es.onopen = () => {
     dot.className = 'connected';
@@ -302,7 +324,11 @@ function connectSSE() {
   });
 }
 
-loadInitial().then(connectSSE);
+if (!token) {
+  showAuthMessage('missing token: open with #token=<token-from-token-source>');
+} else {
+  loadInitial().then(connectSSE);
+}
 </script>
 </body>
 </html>

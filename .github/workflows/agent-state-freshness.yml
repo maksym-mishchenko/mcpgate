@@ -3,8 +3,9 @@
 # Do not edit here — run `seed-agent-memory.sh --update` to re-sync.
 #
 # Advisory PR gate: warns when real work landed without updating .agent/STATE.md.
-# Self-contained (no external scripts / no PAT). Opt in to enforcement by adding
-# this check to branch protection.
+# Self-contained (no external scripts / no PAT). Uses GitHub-hosted runners so
+# public pull requests cannot execute untrusted code on self-hosted machines.
+# Opt in to enforcement by adding this check to branch protection.
 name: agent-state-freshness
 
 on:
@@ -15,9 +16,7 @@ permissions:
 
 jobs:
   state-freshness:
-    # This account runs on self-hosted runners (no GitHub-hosted budget).
-    # Override per repo with the AGENT_CI_RUNNER variable if needed.
-    runs-on: ${{ vars.AGENT_CI_RUNNER || 'self-hosted' }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:

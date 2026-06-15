@@ -3,4 +3,9 @@
 *.db-wal
 *.db-shm
 mcpgate.token
+.mcpgate-token
+audit.key
+*.key
+*.jsonl
+draft-policy.yaml
 dist/

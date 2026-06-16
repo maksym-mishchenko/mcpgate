@@ -15,7 +15,6 @@
 | agent-state-freshness | .github/workflows/agent-state-freshness.yml | active |
 | CI | .github/workflows/ci.yml | active |
 | Release | .github/workflows/release.yml | active |
-| Secret Scan | .github/workflows/secret-scan.yml | active |
 
 ## Current emitted checks
 
@@ -33,7 +32,7 @@
 | typecheck | not currently emitted | no | No stable existing signal identified during inventory. |
 | test | existing test command/workflow | yes | Tests should be part of normalized CI when present. |
 | build | existing build script/workflow | yes | Build should be part of normalized CI when present. |
-| security | existing security scan workflow/check | no | Keep advisory until scan noise and scope are stable. |
+| security | not currently emitted / pending future security workflow | no | No existing security workflow or check was identified during inventory. |
 
 ## Security scan scope
 

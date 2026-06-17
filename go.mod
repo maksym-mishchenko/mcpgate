@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	go.uber.org/goleak v1.3.0
 	gopkg.in/yaml.v3 v3.0.1
-	modernc.org/sqlite v1.51.0
+	modernc.org/sqlite v1.52.0
 )
 
 require (

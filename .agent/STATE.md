@@ -1,5 +1,5 @@
 # State — mcpgate
-Last updated: 2026-06-16 by copilot
+Last updated: 2026-06-17 by copilot
 
 ## Done
 - Synced README, DESIGN, SECURITY, and examples with current v1.1 behavior.
@@ -29,6 +29,7 @@ Last updated: 2026-06-16 by copilot
 - Moved public showcase video links to the v1.4.3 release asset because GitHub does not preview the large MP4 through the repository file viewer.
 
 ## In progress
+- CI gate normalization and branch-protection rollout is in progress on `maksym-mishchenko/ci-gate-hardening`; live PR evidence and negative enforcement proof are still pending.
 
 ## Known issues
 - Plain Go VCS stamping can fail in generated Copilot worktrees; use `-buildvcs=false` locally if needed.

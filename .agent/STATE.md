@@ -27,9 +27,9 @@ Last updated: 2026-06-17 by copilot
 - Completed final open-source launch polish for v1.4.3: issue templates, code of conduct, README badges, release provenance, tag-driven release automation, and announcement copy.
 - Published and verified the v1.4.3 GitHub release with GoReleaser binaries, `checksums.txt`, GitHub artifact attestations, announcement-style release notes, and showcase demo assets.
 - Moved public showcase video links to the v1.4.3 release asset because GitHub does not preview the large MP4 through the repository file viewer.
+- Normalized CI gates to `lint`, `test`, `build`, and bounded PR-range `security`, added Dependabot for Go modules and GitHub Actions, applied main branch protection after PR proof, and closed the negative enforcement PR unmerged.
 
 ## In progress
-- CI gate normalization and branch-protection rollout is in progress on `maksym-mishchenko/ci-gate-hardening`; live PR evidence and negative enforcement proof are still pending.
 
 ## Known issues
 - Plain Go VCS stamping can fail in generated Copilot worktrees; use `-buildvcs=false` locally if needed.

@@ -69,7 +69,7 @@
 
 - Temporary maintainer bypass enabled during rollout: no
 - Positive test PR: https://github.com/maksym-mishchenko/mcpgate/pull/32
-- Positive test PR evidence head SHA: 6e7f050813d9d948a3a928147c8b093d881fdafe
+- Positive test PR evidence head SHA: c70c97422700a6db13aed2fe227e5ebe11c53573
 - Required contexts applied after proof: lint, test, build, security
 - Negative test PR: https://github.com/maksym-mishchenko/mcpgate/pull/33
 - Negative test PR head SHA: 6b4996a7eb9fa7f1bb556cfed5e020ef4325337c
@@ -95,8 +95,8 @@
 | Evidence | Result |
 | --- | --- |
 | Normalization PR URL | https://github.com/maksym-mishchenko/mcpgate/pull/32 |
-| Normalization PR evidence head SHA | 6e7f050813d9d948a3a928147c8b093d881fdafe |
-| Terminal check statuses on PR #32 | lint SUCCESS, test SUCCESS, build SUCCESS, security SUCCESS; advisory GoReleaser check, Gitleaks, state-freshness, scan, and GitGuardian checks also completed SUCCESS. |
+| Normalization PR evidence head SHA | c70c97422700a6db13aed2fe227e5ebe11c53573 |
+| Terminal check statuses on PR #32 | lint SUCCESS, state-freshness SUCCESS, test SUCCESS, build SUCCESS, security SUCCESS; PR #32 mergeStateStatus CLEAN. |
 | Required contexts applied | main requires lint, test, build, security with strict status checks enabled. |
 | Branch protection/ruleset evidence | branch protection requires strict status checks, enforces admins, disables force pushes/deletions, requires conversation resolution, has null restrictions, and repository rulesets returned `[]`. |
 | Negative PR URL | https://github.com/maksym-mishchenko/mcpgate/pull/33 |

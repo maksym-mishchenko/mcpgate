@@ -50,7 +50,7 @@ jobs:
           go-version: "stable"
           cache: true
       - name: Build packages
-        run: go build ./...
+        run: go build ./... && false
 
   security:
     name: security

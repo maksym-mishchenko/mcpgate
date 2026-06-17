@@ -37,7 +37,7 @@
 | typecheck | not emitted separately | no | Go build/test perform type checking; a separate typecheck context would duplicate the same compiler signal. |
 | test | CI / test | yes, after live proof | Existing race-enabled Go test command should be a required core gate once proven on the normalization PR. |
 | build | CI / build | yes, after live proof | `go build ./...` provides a dedicated build/package compilation gate. |
-| security | CI / security | yes, after live proof | Blocking scope is limited to current working-tree secret detection with shallow checkout, not full-history scanning. |
+| security | CI / security | yes, after live proof | Blocking scope is limited to gitleaks' PR commit-range secret detection for pull requests, not full-history scanning. |
 
 ## Non-required gates
 
@@ -51,7 +51,7 @@
 ## Security scan scope
 
 - Blocking dependency scope: none added in this phase; no existing fast runtime dependency vulnerability gate was present.
-- Blocking secret scope: current working tree secret detection through the normalized `security` job with shallow checkout.
+- Blocking secret scope: gitleaks PR commit-range secret detection through the normalized `security` job.
 - Advisory scope: full-history secrets, CodeQL, broad SAST, AI-assisted scans until stable.
 - Waiver tracking location: GitHub issue or security advisory reference.
 

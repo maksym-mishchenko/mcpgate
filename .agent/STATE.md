@@ -1,5 +1,5 @@
 # State — mcpgate
-Last updated: 2026-06-17 by copilot
+Last updated: 2026-06-26 by copilot
 
 ## Done
 - Synced README, DESIGN, SECURITY, and examples with current v1.1 behavior.
@@ -28,6 +28,7 @@ Last updated: 2026-06-17 by copilot
 - Published and verified the v1.4.3 GitHub release with GoReleaser binaries, `checksums.txt`, GitHub artifact attestations, announcement-style release notes, and showcase demo assets.
 - Moved public showcase video links to the v1.4.3 release asset because GitHub does not preview the large MP4 through the repository file viewer.
 - Normalized CI gates to `lint`, `test`, `build`, and bounded PR-range `security`, added Dependabot for Go modules and GitHub Actions, applied main branch protection after PR proof, and closed the negative enforcement PR unmerged.
+- Initialized GitHub Spec Kit 0.11.8 for Copilot with shell scripts, templates, workflows, prompts, agents, and VS Code recommendations.
 
 ## In progress
 

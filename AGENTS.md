@@ -1,6 +1,8 @@
 # AGENTS.md
 
 
+
+> 📍 **Project status / focus tier:** see [PORTFOLIO.md](https://github.com/maksym-mishchenko/openclaw-workspace/blob/main/PORTFOLIO.md) in `openclaw-workspace` (canonical source).
 <!-- agent-memory:start (managed by scripts/seed-agent-memory.sh — edit canonical source: docs/operations/agent-memory-protocol.md) -->
 ## Agent Memory Protocol (condensed)
 

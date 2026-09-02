@@ -2,6 +2,7 @@
 Last updated: 2026-09-02 by copilot
 
 ## Done
+- Removed the advisory state-freshness workflow; repository state metadata remains useful context but no longer consumes a PR workflow run.
 - Deduplicated secret scanning by removing the standalone Gitleaks workflow; the required CI `security` job retains Gitleaks coverage on pull requests and pushes to `main`.
 - Synced README, DESIGN, SECURITY, and examples with current v1.1 behavior.
 - Added ROADMAP.md as the repository-local backlog for v1.2+.

@@ -9,15 +9,13 @@
 - Inventory branch: chore/fleet-ci-baseline-inventory
 - Implementation branch: maksym-mishchenko/ci-gate-hardening
 
-## Existing workflows
+## Current workflows (2026-09-02)
 
 | Workflow | Path | State |
 | --- | --- | --- |
-| agent-state-freshness | .github/workflows/agent-state-freshness.yml | active |
+| agent-state-freshness | .github/workflows/agent-state-freshness.yml | active, advisory |
 | CI | .github/workflows/ci.yml | active |
-| gitleaks | .github/workflows/gitleaks.yml | active |
 | Release | .github/workflows/release.yml | active |
-| Secret Scan | .github/workflows/secret-scan.yml | active |
 
 ## Current emitted checks
 
@@ -28,8 +26,6 @@
 | test | terminal success | yes |
 | build | terminal success | yes |
 | security | terminal success | yes |
-| gitleaks / scan | terminal success on current baseline; advisory | no |
-| Secret Scan / Gitleaks | terminal success on current baseline; advisory | no |
 
 ## Target normalized gates
 
@@ -47,8 +43,6 @@
 | --- | --- | --- |
 | GoReleaser check | CI / GoReleaser check | Release configuration validation is useful but not a core PR correctness gate for this phase. |
 | state-freshness | agent-state-freshness / state-freshness | Repository-local agent hygiene gate; not part of the normalized fleet core set. |
-| scan | gitleaks / scan | Full-history secret scanning is broad and remains advisory. |
-| Gitleaks | Secret Scan / Gitleaks | Full-history secret scanning is broad and remains advisory. |
 
 ## Security scan scope
 
@@ -80,7 +74,7 @@
 
 - Branch protection: enabled on `main` after PR #32 proved terminal success for all required contexts.
 - Repository rulesets returned: 0
-- Active GitHub workflow registry checked during rollout: agent-state-freshness, CI, gitleaks, Release, Secret Scan.
+- Historical rollout workflow registry: agent-state-freshness, CI, gitleaks, Release, Secret Scan. The duplicate standalone scanners were subsequently retired; current inventory is above.
 - Current required status checks: lint, test, build, security.
 - Required status checks strict mode: enabled.
 - Admin enforcement: enabled.

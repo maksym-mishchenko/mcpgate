@@ -1,5 +1,5 @@
 # State — mcpgate
-Last updated: 2026-07-30 by copilot
+Last updated: 2026-09-02 by copilot
 
 ## Done
 - Synced README, DESIGN, SECURITY, and examples with current v1.1 behavior.
@@ -31,6 +31,7 @@ Last updated: 2026-07-30 by copilot
 - Initialized GitHub Spec Kit 0.11.8 for Copilot with shell scripts, templates, workflows, prompts, agents, and VS Code recommendations.
 - Bumped `actions/setup-go` from v6 to v7 in CI and release workflows (Dependabot PR #44).
 - Bumped `modernc.org/sqlite` from v1.53.0 to v1.55.0 (Dependabot PR #45).
+- Bumped `modernc.org/sqlite` to v1.57.0 and pinned CI/release to Go 1.26.x for golangci-lint compatibility.
 
 ## In progress
 

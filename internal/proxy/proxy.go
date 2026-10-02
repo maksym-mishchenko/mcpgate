@@ -75,6 +75,9 @@ func (p *Proxy) Run(ctx context.Context) {
 			if err := p.cfg.ServerTransport.Send(ctx, msg); err != nil {
 				return
 			}
+			if msg.Kind() == jsonrpc.KindNotification {
+				continue
+			}
 			resp, err := p.recvServerResponse(ctx)
 			if err != nil {
 				p.sendError(ctx, msg, "server response unavailable")

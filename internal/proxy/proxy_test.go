@@ -1235,3 +1235,53 @@ func TestInboundResultWarning_ErrorChannel_BlockOnWarn_WithholdsContent(t *testi
 		t.Error("expected at least one inbound warning, got none")
 	}
 }
+
+func TestAgentNotificationDoesNotWaitForResponse(t *testing.T) {
+	// The MCP handshake ends with a client notification that the server never
+	// answers. The proxy must forward it and go on to serve the next request.
+	initialized := `{"jsonrpc":"2.0","method":"notifications/initialized"}` + "\n"
+	toolCall := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{}}}` + "\n"
+	toolResp := `{"jsonrpc":"2.0","id":1,"result":{"content":"file content"}}` + "\n"
+
+	var agentOut bytes.Buffer
+	agentIn := transport.NewStdio(strings.NewReader(initialized+toolCall), &agentOut)
+
+	var serverOut bytes.Buffer
+	serverIn := transport.NewStdio(strings.NewReader(toolResp), &serverOut)
+
+	cfg := &policy.Config{
+		Mode:    "enforce",
+		Default: policy.AllowFalse,
+		Servers: map[string]policy.ServerConfig{
+			"fs": {
+				Command: []string{"echo"},
+				Tools: map[string]policy.TargetRule{
+					"read_file": {Allow: policy.AllowTrue},
+				},
+			},
+		},
+	}
+
+	p := proxy.New(proxy.Config{
+		AgentTransport:  agentIn,
+		ServerTransport: serverIn,
+		PolicyConfig:    cfg,
+		Coordinator:     approval.New(),
+		AuditStore:      &fakeAudit{},
+		ServerName:      "fs",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	p.Run(ctx)
+
+	if !bytes.Contains(serverOut.Bytes(), []byte("notifications/initialized")) {
+		t.Errorf("notification was not forwarded to the server; server input: %s", serverOut.Bytes())
+	}
+	if !bytes.Contains(agentOut.Bytes(), []byte("file content")) {
+		t.Errorf("tool response did not reach agent; agent output: %s", agentOut.Bytes())
+	}
+	if bytes.Contains(agentOut.Bytes(), []byte(`"error"`)) {
+		t.Errorf("agent received an error; agent output: %s", agentOut.Bytes())
+	}
+}
